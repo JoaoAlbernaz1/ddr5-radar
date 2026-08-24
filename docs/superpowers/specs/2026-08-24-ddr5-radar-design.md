@@ -266,8 +266,23 @@ par, mas com preço absurdo para o mercado do dia.
 | 🔴 BUG | Sinal 1 e/ou 2 forte, com desvio grande | "Larga o que estiver fazendo" |
 | 🟡 PROMO | Desvio moderado, ou menor preço histórico do produto | "Vale olhar quando puder" |
 
-Os limiares exatos ficam em **configuração no painel**, não no código, com
-valor inicial conservador. Sem histórico coletado não há como acertar o número
+### Valores iniciais dos limiares
+
+Ficam em **configuração no painel**, não no código — mas o sistema nasce com
+estes números, para não começar chutando:
+
+| Sinal | 🔴 BUG | 🟡 PROMO |
+|---|---|---|
+| 1 — desvio da mediana entre lojas | preço ≤ 55% da mediana (45%+ abaixo) | 55% a 80% da mediana |
+| 2 — queda contra o próprio histórico | queda ≥ 40% numa única coleta | queda ≥ 20% |
+| 3 — posição na curva de R$/GB | nunca sozinho | abaixo do percentil 5 do dia |
+
+O Sinal 1 exige a chave canônica presente em **3 lojas ou mais**; com menos
+que isso a mediana não tem sustentação e o sinal é ignorado. O Sinal 3 nunca
+gera 🔴 sozinho: ele é fraco por natureza (compara produtos diferentes entre
+si) e só serve para levantar suspeita.
+
+Estes números são um ponto de partida deliberadamente conservador. Sem histórico coletado não há como acertar o número
 de primeira. A tela de configuração mostra, para o limiar escolhido, quantos
 alertas teriam disparado nos últimos 7 dias — a calibração é feita vendo o
 efeito, não no escuro.
