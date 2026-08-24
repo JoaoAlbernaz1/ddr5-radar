@@ -212,11 +212,26 @@ capacidade 32           (GB totais do kit)
 modulos    2
 velocidade 6000         (MT/s)
 latencia   36           (CL)
+formato    dimm         (desktop) | sodimm (notebook)
 rgb        sim
-→ chave:   kingston|fury-beast|32|2|6000|36|rgb
+→ chave:   kingston|fury-beast|32|2|6000|36|dimm|rgb
 ```
 
+**Part number tem prioridade sobre a chave derivada.** Quase todo título
+carrega o código do fabricante no fim (`... - KF556C40BB-16`). Quando duas
+ofertas têm o mesmo part number normalizado, são o mesmo produto — sem
+depender de o parser ter acertado a leitura do texto. A chave derivada é o
+caminho de reserva, para o anúncio que não declara part number (comum no
+Mercado Livre).
+
 Regras que importam:
+
+- **Formato entra na identidade.** `Memória RAM para Notebook ... 8GB` é SODIMM
+  e não pode ser comparada com DIMM de desktop: são mercados com preços
+  diferentes, e compará-los produz falso positivo garantido. Título com
+  "notebook", "sodimm" ou "so-dimm" é SODIMM; o resto é DIMM.
+- **MHz e MT/s são o mesmo número.** As lojas usam os dois rótulos para a mesma
+  grandeza (`5600MT/s` e `5600MHz` no mesmo catálogo). O parser aceita ambos.
 
 - **Capacidade é sempre o total do kit**, nunca a do módulo. `2x16GB` = 32. Um
   anúncio que diz "32GB" descrevendo um pente único é um produto diferente de
@@ -228,6 +243,14 @@ Regras que importam:
   recalculadas sobre o histórico já coletado.
 - **DDR4 aparecendo em busca de DDR5** é descartado na entrada: título com DDR4,
   ou velocidade abaixo de 4000 MT/s, não é DDR5.
+
+**O mesmo produto se repete dentro da mesma loja.** Coleta real de 2026-08-24
+no Kabum: `Memória Gamer Kingston Fury Beast, 8GB, DDR5, 5600MHz, CL40 -
+Kf556c40bb-8` a R$ 1.175,02 e `Memória 8GB, DDR5 5600mhz Kingston Fury Beast,
+Preto - Kf556c40bb-8` a R$ 1.399,99 — mesmo part number, mesma loja, 19% de
+diferença. Isso significa que a mediana precisa ser calculada sobre lojas
+distintas, e não sobre ofertas: uma loja com quatro anúncios do mesmo pente não
+pode ter quatro votos na referência de preço.
 
 Cada regra de parsing nasce de um título real coletado e vira caso de teste
 (§12).
@@ -245,9 +268,11 @@ mesmo sem match exato de produto.
 ### Os três sinais
 
 **Sinal 1 — Desvio entre lojas (o mais forte).**
-Para cada chave canônica presente em 3 lojas ou mais, calcula a mediana. Uma
-oferta abaixo de um limiar percentual dessa mediana é candidata. Mediana e não
-média, porque uma única loja errando não pode mover a referência.
+Para cada produto presente em 3 lojas ou mais, calcula a mediana. Uma oferta
+abaixo de um limiar percentual dessa mediana é candidata. Mediana e não média,
+porque uma única loja errando não pode mover a referência — e **um preço por
+loja**, o menor dela, porque loja com anúncio duplicado não pode votar duas
+vezes.
 
 **Sinal 2 — Queda contra o próprio histórico.**
 Preço atual contra a mediana dos últimos 30 dias *da mesma oferta*. Queda
