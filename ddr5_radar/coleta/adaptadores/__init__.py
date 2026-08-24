@@ -2,9 +2,11 @@
 from ddr5_radar.coleta.adaptadores.amazon import AdaptadorAmazon
 from ddr5_radar.coleta.adaptadores.kabum import AdaptadorKabum
 from ddr5_radar.coleta.adaptadores.mercadolivre import AdaptadorMercadoLivre
+from ddr5_radar.coleta.adaptadores.terabyte import AdaptadorTerabyte
 
 ADAPTADORES = {
     "kabum": AdaptadorKabum(),
     "amazon": AdaptadorAmazon(),
     "mercadolivre": AdaptadorMercadoLivre(),
+    "terabyte": AdaptadorTerabyte(),
 }
