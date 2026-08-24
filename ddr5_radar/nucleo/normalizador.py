@@ -27,6 +27,11 @@ MARCAS = {
     "keepdata": ["keepdata"],
     "asgard": ["asgard"],
     "acer": ["acer", "predator"],
+    "apacer": ["apacer"],
+    "sgmax": ["sgmax"],
+    "mancer": ["mancer"],
+    "redragon": ["redragon"],
+    "hiksemi": ["hiksemi"],
     "warrior": ["warrior", "multilaser"],
 }
 
@@ -42,6 +47,14 @@ LINHAS = {
     "caster": ["caster"],
     "delta": ["delta"],
     "elite": ["elite"],
+    "armax": ["armax"],
+    "nox": ["nox"],
+    "panther": ["panther"],
+    "vulcan": ["vulcan"],
+    "blade": ["lancer blade"],
+    "zeus": ["zeus"],
+    "armor": ["armor"],
+    "z-series": ["z series"],
 }
 
 
@@ -64,9 +77,14 @@ def _sem_acento(texto: str) -> str:
 
 
 def _achar(mapa: dict[str, list[str]], texto: str) -> str | None:
+    """Casa por palavra inteira, nunca por pedaco.
+
+    "Apacer" contem "acer": buscar substring devolvia a marca errada.
+    """
     for canonico, apelidos in mapa.items():
-        if any(apelido in texto for apelido in apelidos):
-            return canonico
+        for apelido in apelidos:
+            if re.search(rf"\b{re.escape(apelido)}\b", texto):
+                return canonico
     return None
 
 
@@ -99,12 +117,30 @@ def _velocidade(texto: str) -> int | None:
     return int(depois_do_gb.group(1)) if depois_do_gb else None
 
 
+# Unidades que aparecem no fim de titulo e se parecem com codigo de peca:
+# "5600MHz" tem letras e digitos suficientes para enganar o detector.
+# "w" solto nao entra: "-W" e sufixo de cor (White) em part number, e
+# watts sempre vem depois de numero (650W).
+UNIDADE_NO_FIM = re.compile(r"(mhz|mt/?s|gb|tb|cl\d*|[0-9]v|[0-9]w)$", re.I)
+
+
 def _part_number(titulo: str) -> str | None:
-    """Codigo do fabricante, quase sempre no fim depois de um traco."""
-    fim = re.search(r"[-–—]\s*([A-Za-z0-9][A-Za-z0-9./-]{5,})\s*$", titulo.strip())
+    """Codigo do fabricante no fim do titulo.
+
+    Ele aparece depois de traco ("- KF556C36BBE-16"), depois de virgula
+    (", AX5U5600C4616G-SAMRBK") ou solto depois de um espaco
+    ("Keepdata Kd56n46/8g"). Verificado em 360 titulos reais de Kabum e
+    Terabyte em 2026-08-24 -- so aceitar traco encontrava 20% deles.
+    """
+    fim = re.search(r"[,\-–—\s]\s*([A-Za-z0-9][A-Za-z0-9./-]{6,})\s*$", titulo.strip())
     if not fim:
         return None
-    candidato = fim.group(1)
+
+    candidato = fim.group(1).strip(".,")
+    if len(candidato) < 7:
+        return None
+    if UNIDADE_NO_FIM.search(candidato):
+        return None  # "5600MHz", "16GB": medida, nao codigo de peca
     tem_letras = len(re.findall(r"[A-Za-z]", candidato)) >= 2
     tem_digitos = len(re.findall(r"\d", candidato)) >= 2
     return candidato.upper() if tem_letras and tem_digitos else None
@@ -125,4 +161,61 @@ def extrair_atributos(titulo: str) -> AtributosMemoria:
         formato=Formato.SODIMM if e_notebook else Formato.DIMM,
         rgb=bool(re.search(r"\brgb\b", texto)),
         part_number=_part_number(titulo),
+    )
+
+
+VELOCIDADE_MINIMA_DDR5 = 4800  # a DDR5 mais lenta de fabrica
+
+NAO_E_MEMORIA = (
+    "pc gamer", "computador", "placa-mae", "placa mae", "placa m e",
+    "processador", "notebook gamer", "kit upgrade", "kit de upgrade",
+    "workstation", "servidor", "all in one",
+)
+
+
+def eh_ddr5(titulo: str, atributos: AtributosMemoria) -> bool:
+    texto = _sem_acento(titulo).lower()
+    if re.search(r"\bddr[234]\b", texto):
+        return False
+    if "ddr5" in texto:
+        return True
+    velocidade = atributos.velocidade_mts
+    return velocidade is not None and velocidade >= VELOCIDADE_MINIMA_DDR5
+
+
+def eh_memoria(titulo: str) -> bool:
+    """Nem tudo que diz DDR5 e memoria.
+
+    A busca da Terabyte devolve "PC Gamer Plataforma AMD Ryzen 7000 DDR5" e
+    "Placa-mae ASUS TUF B650M-E DDR5" (coletado em 2026-08-24). Um PC de 32GB
+    entraria como pente de 32GB e envenenaria a mediana.
+    """
+    texto = _sem_acento(titulo).lower()
+    return not any(termo in texto for termo in NAO_E_MEMORIA)
+
+
+def chave_canonica(atributos: AtributosMemoria) -> str | None:
+    """Identidade de reserva, para quando nao ha part number.
+
+    Sem latencia de proposito: ela falta em muito titulo de marketplace e
+    a ausencia quebraria matches legitimos. Exige linha reconhecida --
+    identificar menos e melhor que identificar errado.
+    """
+    if not (
+        atributos.marca
+        and atributos.linha
+        and atributos.capacidade_gb
+        and atributos.velocidade_mts
+    ):
+        return None
+    return "|".join(
+        [
+            atributos.marca,
+            atributos.linha,
+            str(atributos.capacidade_gb),
+            str(atributos.modulos) if atributos.modulos else "?",
+            str(atributos.velocidade_mts),
+            atributos.formato.value,
+            "rgb" if atributos.rgb else "sem-rgb",
+        ]
     )

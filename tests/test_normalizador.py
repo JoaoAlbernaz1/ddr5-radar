@@ -70,3 +70,123 @@ def test_marca_da_corsair():
     assert a.marca == "corsair"
     assert a.linha == "vengeance"
     assert a.modulos == 2
+
+
+from ddr5_radar.nucleo.normalizador import chave_canonica, eh_ddr5, eh_memoria
+
+DDR4 = "Memória RAM Kingston Fury Beast, 16GB, 3200MHz, DDR4, CL16 - KF432C16BB1-16"
+PC_GAMER = "PC Gamer Plataforma AMD Ryzen 7000 DDR5 AM5 (FULL CUSTOM)"
+PLACA_MAE = "Placa-mãe ASUS TUF Gaming B650M-E WiFi DDR5, Socket AM5, mATX"
+
+
+def test_pc_montado_nao_e_memoria():
+    assert eh_memoria(PC_GAMER) is False
+
+
+def test_placa_mae_nao_e_memoria():
+    assert eh_memoria(PLACA_MAE) is False
+
+
+def test_pente_de_memoria_e_memoria():
+    assert eh_memoria(KABUM_SIMPLES) is True
+    assert eh_memoria(ML_BAGUNCADO) is True
+
+
+def test_ddr4_nao_passa():
+    a = extrair_atributos(DDR4)
+    assert eh_ddr5(DDR4, a) is False
+
+
+def test_ddr5_declarado_passa():
+    a = extrair_atributos(KABUM_SIMPLES)
+    assert eh_ddr5(KABUM_SIMPLES, a) is True
+
+
+def test_sem_rotulo_mas_rapido_demais_para_ddr4_passa():
+    titulo = "Memoria 16GB 5600MHz Kingston Fury Beast"
+    assert eh_ddr5(titulo, extrair_atributos(titulo)) is True
+
+
+def test_chave_ignora_latencia_para_nao_perder_match():
+    com_cl = extrair_atributos(
+        "Memória RAM Kingston Fury Beast, 16GB, 5600MT/s, DDR5, CL36 - KF556C36BBE-16"
+    )
+    sem_cl = extrair_atributos("MEMORIA KINGSTON FURY BEAST 16GB DDR5 5600")
+    assert chave_canonica(com_cl) == chave_canonica(sem_cl)
+
+
+def test_notebook_e_desktop_nao_compartilham_chave():
+    desktop = extrair_atributos("Memória Corsair Vengeance, 8GB, 4800MHz, DDR5")
+    notebook = extrair_atributos("Memória para Notebook Corsair Vengeance, 8GB, 4800MHz, DDR5")
+    assert chave_canonica(desktop) != chave_canonica(notebook)
+
+
+def test_rgb_muda_a_chave():
+    com = extrair_atributos("Memória Kingston Fury Beast RGB, 16GB, 5600MHz, DDR5")
+    sem = extrair_atributos("Memória Kingston Fury Beast, 16GB, 5600MHz, DDR5")
+    assert chave_canonica(com) != chave_canonica(sem)
+
+
+def test_sem_linha_reconhecida_nao_gera_chave():
+    a = extrair_atributos("Memoria DDR5 16GB 5600MHz marca desconhecida")
+    assert chave_canonica(a) is None
+
+
+def test_chave_e_estavel_e_legivel():
+    a = extrair_atributos(KABUM_KIT)
+    assert chave_canonica(a) == "kingston|fury-beast|32|2|6000|dimm|sem-rgb"
+
+
+# --- titulos reais coletados em 2026-08-24 que o parser inicial errou ---
+REAL_XPG = "Memória DDR5 XPG Armax RGB, 16GB, 5600MHz, Preto, AX5U5600C4616G-SAMRBK"
+REAL_APACER = "Memória DDR5 Apacer Nox, 16GB, 6000MHz, Branco, AH5U16G60C622MWAA-1"
+REAL_KEEPDATA = "Mem Desk Ddr5  8GB 5600mhz Keepdata Kd56n46/8g"
+REAL_CORSAIR_PN = "Memória RAM Corsair Vengeance, 32GB (2x16GB), 6000MHz, DDR5, CL38 - CMK32GX5M2B6000C38"
+
+
+def test_part_number_depois_de_virgula():
+    assert extrair_atributos(REAL_XPG).part_number == "AX5U5600C4616G-SAMRBK"
+    assert extrair_atributos(REAL_APACER).part_number == "AH5U16G60C622MWAA-1"
+
+
+def test_part_number_depois_de_espaco_com_barra():
+    assert extrair_atributos(REAL_KEEPDATA).part_number == "KD56N46/8G"
+
+
+def test_part_number_sem_separador_especial():
+    assert extrair_atributos(REAL_CORSAIR_PN).part_number == "CMK32GX5M2B6000C38"
+
+
+def test_medida_no_fim_nao_e_confundida_com_part_number():
+    assert extrair_atributos("Memória Kingston Fury Beast DDR5 16GB 5600MHz").part_number is None
+    assert extrair_atributos("Memória DDR5 Corsair Vengeance 32GB").part_number is None
+    assert extrair_atributos("Memória DDR5 Kingston Fury Beast, 16GB, CL36").part_number is None
+
+
+def test_marcas_novas_reconhecidas():
+    assert extrair_atributos(REAL_APACER).marca == "apacer"
+    assert extrair_atributos(REAL_XPG).marca == "adata"
+    assert extrair_atributos(REAL_KEEPDATA).marca == "keepdata"
+
+
+def test_linhas_novas_reconhecidas():
+    assert extrair_atributos(REAL_XPG).linha == "armax"
+    assert extrair_atributos(REAL_APACER).linha == "nox"
+
+
+def test_sufixo_de_cor_nao_e_confundido_com_watts():
+    # "-W" de White estava batendo na regra de unidade "w$" e matando o
+    # part number inteiro. Watts so aparece depois de numero (650W).
+    branca = "Memória DDR5 Rise Mode Zeus Series, 16GB, 5600MHz, Branca, RM-D5-16G-5600ZE-W"
+    preta = "Memória DDR5 Rise Mode Zeus Series, 16GB, 5600MHz, Preto, RM-D5-16G-5600ZE-B"
+    assert extrair_atributos(branca).part_number == "RM-D5-16G-5600ZE-W"
+    assert extrair_atributos(preta).part_number == "RM-D5-16G-5600ZE-B"
+
+
+def test_marca_e_linha_do_rise_mode_e_hiksemi():
+    zeus = extrair_atributos("Memória DDR5 Rise Mode Zeus Series, 16GB, 6000MHz, Preto")
+    assert zeus.marca == "rise-mode"
+    assert zeus.linha == "zeus"
+    hik = extrair_atributos("Memória DDR5 Hiksemi Armor, 16GB, 4800MHz, Branco")
+    assert hik.marca == "hiksemi"
+    assert hik.linha == "armor"
