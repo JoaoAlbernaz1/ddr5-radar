@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Um coletor em Python que, a cada 10 minutos, lê o preço de todas as memórias DDR5 de 5 lojas brasileiras, identifica qual anúncio é qual produto, e grava tudo em Postgres com histórico.
+**Goal:** Um coletor em Python que, a cada 10 minutos, lê o preço de todas as memórias DDR5 nas lojas brasileiras, identifica qual anúncio é qual produto, e grava tudo em Postgres com histórico. Quatro lojas entram ligadas no v1 (Kabum, Amazon, Mercado Livre, Terabyte); a Pichau fica escrita e desligada até o anti-bot dela permitir capturar uma fixture — ver Task 10.
 
 **Architecture:** Cada loja é um adaptador isolado atrás de um contrato único (`buscar(termo) -> list[OfertaCrua]`), usando httpx, Playwright ou API conforme a loja permita. O executor roda todos os adaptadores isolando a falha de cada um, o normalizador converte títulos livres em identidade de produto (part number e chave canônica), e a persistência grava oferta + preço observado. Roda no GitHub Actions por cron.
 
-**Tech Stack:** Python 3.12, httpx, selectolax, Playwright, SQLAlchemy 2, Alembic, Postgres (Supabase), pytest, respx.
+**Tech Stack:** Python 3.13, httpx, selectolax, Playwright, SQLAlchemy 2, Alembic, Postgres (Supabase), pytest, respx.
 
 **Spec:** `docs/superpowers/specs/2026-08-24-ddr5-radar-design.md`
 
@@ -14,7 +14,7 @@
 
 ## Global Constraints
 
-- **Python 3.12** — é o runtime da Vercel, onde o painel do Plano 2 vai rodar. Não usar sintaxe de 3.13+.
+- **Python 3.13** — a Vercel aceita 3.12, 3.13 e 3.14; 3.13 é a mais nova com wheels garantidas para Playwright e psycopg, e já está instalada na máquina do João. Não usar sintaxe de 3.14+.
 - **Assíncrono em toda a coleta.** Todo adaptador é `async def buscar(...)`. Playwright e httpx são usados nas versões async.
 - **Nenhum teste toca a rede**, exceto os marcados `@pytest.mark.rede`, que ficam desmarcados por padrão em `pyproject.toml`.
 - **Nenhuma credencial no repositório.** O repo é público. Tudo por variável de ambiente.
@@ -70,7 +70,7 @@ Regra de dependência: `contrato.py` não importa nada do projeto — é o vocab
 [project]
 name = "ddr5-radar"
 version = "0.1.0"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.13,<3.14"
 dependencies = [
     "httpx>=0.27",
     "selectolax>=0.3.21",
@@ -127,7 +127,7 @@ def test_explode_quando_falta_database_url(monkeypatch):
 
 - [ ] **Step 3: Rodar e ver falhar**
 
-Run: `python3.12 -m venv .venv && .venv/bin/pip install -e ".[dev]" && .venv/bin/pytest tests/test_config.py -v`
+Run: `python3.13 -m venv .venv && .venv/bin/pip install -e ".[dev]" && .venv/bin/pytest tests/test_config.py -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'ddr5_radar.config'`
 
 - [ ] **Step 4: Implementar**
@@ -586,6 +586,7 @@ git commit -m "Extracao de atributos de memoria a partir do titulo"
 - Consumes: `AtributosMemoria`, `extrair_atributos` da Task 3
 - Produces:
   - `eh_ddr5(titulo: str, atributos: AtributosMemoria) -> bool`
+  - `eh_memoria(titulo: str) -> bool`
   - `chave_canonica(atributos: AtributosMemoria) -> str | None`
 
 **Decisão de design que quem implementa precisa entender:** a chave canônica **não inclui a latência CL**, porque ela falta em muitos títulos de marketplace e sua ausência quebraria matches legítimos. Inclui `linha`, e por isso **exige** que a linha tenha sido reconhecida — sem ela, retorna `None`, e o produto passa a depender do part number para ser identificado. Preferimos identificar menos a identificar errado: um match falso vira alerta falso (spec §7).
@@ -596,9 +597,26 @@ Part number e chave canônica são **guardados os dois** na tabela. Quem agrupa 
 
 ```python
 # acrescentar em tests/test_normalizador.py
-from ddr5_radar.nucleo.normalizador import chave_canonica, eh_ddr5
+from ddr5_radar.nucleo.normalizador import chave_canonica, eh_ddr5, eh_memoria
 
 DDR4 = "Memória RAM Kingston Fury Beast, 16GB, 3200MHz, DDR4, CL16 - KF432C16BB1-16"
+
+
+PC_GAMER = "PC Gamer Plataforma AMD Ryzen 7000 DDR5 AM5 (FULL CUSTOM)"
+PLACA_MAE = "Placa-mãe ASUS TUF Gaming B650M-E WiFi DDR5, Socket AM5, mATX"
+
+
+def test_pc_montado_nao_e_memoria():
+    assert eh_memoria(PC_GAMER) is False
+
+
+def test_placa_mae_nao_e_memoria():
+    assert eh_memoria(PLACA_MAE) is False
+
+
+def test_pente_de_memoria_e_memoria():
+    assert eh_memoria(KABUM_SIMPLES) is True
+    assert eh_memoria(ML_BAGUNCADO) is True
 
 
 def test_ddr4_nao_passa():
@@ -669,6 +687,24 @@ def eh_ddr5(titulo: str, atributos: AtributosMemoria) -> bool:
     return velocidade is not None and velocidade >= VELOCIDADE_MINIMA_DDR5
 
 
+NAO_E_MEMORIA = (
+    "pc gamer", "computador", "placa-mae", "placa mae", "placa m e",
+    "processador", "notebook gamer", "kit upgrade", "kit de upgrade",
+    "workstation", "servidor", "all in one",
+)
+
+
+def eh_memoria(titulo: str) -> bool:
+    """Nem tudo que diz DDR5 e memoria.
+
+    A busca da Terabyte devolve "PC Gamer Plataforma AMD Ryzen 7000 DDR5" e
+    "Placa-mae ASUS TUF B650M-E DDR5" (coletado em 2026-08-24). Um PC de 32GB
+    entraria como pente de 32GB e envenenaria a mediana.
+    """
+    texto = _sem_acento(titulo).lower()
+    return not any(termo in texto for termo in NAO_E_MEMORIA)
+
+
 def chave_canonica(atributos: AtributosMemoria) -> str | None:
     """Identidade de reserva, para quando nao ha part number.
 
@@ -699,7 +735,7 @@ def chave_canonica(atributos: AtributosMemoria) -> str | None:
 - [ ] **Step 4: Rodar e ver passar**
 
 Run: `.venv/bin/pytest tests/test_normalizador.py -v`
-Expected: PASS, 17 testes
+Expected: PASS, 20 testes
 
 - [ ] **Step 5: Commit**
 
@@ -1102,6 +1138,15 @@ def test_preco_diferente_vira_linha_nova(sessao):
     assert len(sessao.scalars(select(PrecoObservado)).all()) == 2
 
 
+def test_pc_gamer_com_ddr5_e_descartado(sessao):
+    rodada = iniciar_rodada(sessao)
+    pc = _crua(titulo="PC Gamer Plataforma AMD Ryzen 7000 DDR5 AM5 32GB (FULL CUSTOM)")
+    resumo = gravar_ofertas(sessao, rodada, [pc])
+
+    assert resumo.descartadas == 1
+    assert sessao.scalars(select(Oferta)).all() == []
+
+
 def test_ddr4_e_descartada_na_entrada(sessao):
     rodada = iniciar_rodada(sessao)
     ddr4 = _crua(titulo="Memória Kingston Fury Beast, 16GB, 3200MHz, DDR4, CL16")
@@ -1153,7 +1198,7 @@ from sqlalchemy.orm import Session
 
 from ddr5_radar.contrato import OfertaCrua
 from ddr5_radar.nucleo.modelos import Oferta, PrecoObservado, Rodada, SaudeAdaptador
-from ddr5_radar.nucleo.normalizador import chave_canonica, eh_ddr5, extrair_atributos
+from ddr5_radar.nucleo.normalizador import chave_canonica, eh_ddr5, eh_memoria, extrair_atributos
 
 
 @dataclass(slots=True)
@@ -1177,7 +1222,7 @@ def gravar_ofertas(
     resumo = ResumoGravacao()
     for crua in ofertas:
         atributos = extrair_atributos(crua.titulo)
-        if not eh_ddr5(crua.titulo, atributos):
+        if not eh_ddr5(crua.titulo, atributos) or not eh_memoria(crua.titulo):
             resumo.descartadas += 1
             continue
 
@@ -1278,7 +1323,7 @@ def finalizar_rodada(sessao: Session, rodada: Rodada, resumo: ResumoGravacao) ->
 - [ ] **Step 4: Rodar e ver passar**
 
 Run: `.venv/bin/pytest tests/test_persistencia.py -v`
-Expected: PASS, 7 testes
+Expected: PASS, 8 testes
 
 - [ ] **Step 5: Commit**
 
@@ -1334,7 +1379,7 @@ URLS_HTTP = {
     "amazon": "https://www.amazon.com.br/s?k=memoria+ddr5",
 }
 URLS_NAVEGADOR = {
-    "pichau": "https://www.pichau.com.br/hardware/memorias?trilha=ddr5",
+    "pichau": "https://www.pichau.com.br/hardware/memorias",
     "terabyte": "https://www.terabyteshop.com.br/busca?str=ddr5",
 }
 
@@ -1354,10 +1399,14 @@ async def capturar(loja: str) -> None:
     else:
         from playwright.async_api import async_playwright
 
+        # A Pichau bloqueia headless (verificado em 2026-08-24); a Terabyte nao.
         async with async_playwright() as p:
-            navegador = await p.chromium.launch()
+            navegador = await p.chromium.launch(headless=(loja != "pichau"))
             pagina = await navegador.new_page(user_agent=UA, locale="pt-BR")
-            await pagina.goto(URLS_NAVEGADOR[loja], wait_until="networkidle", timeout=60_000)
+            await pagina.goto(URLS_NAVEGADOR[loja], wait_until="domcontentloaded", timeout=45_000)
+            await pagina.wait_for_timeout(8_000)
+            await pagina.mouse.wheel(0, 4_000)
+            await pagina.wait_for_timeout(3_000)
             arquivo.write_text(await pagina.content(), encoding="utf-8")
             await navegador.close()
 
@@ -2024,135 +2073,40 @@ git commit -m "Adaptador do Mercado Livre via API oficial com token"
 **Files:**
 - Create: `ddr5_radar/coleta/navegador.py`
 - Create: `ddr5_radar/coleta/adaptadores/pichau.py`
-- Create: `scripts/inspecionar_fixture.py`
-- Create: `tests/fixtures/pichau_busca_ddr5.html`
 - Create: `tests/adaptadores/test_pichau.py`
 - Modify: `ddr5_radar/coleta/adaptadores/__init__.py`
 
 **Interfaces:**
 - Consumes: `OfertaCrua`, `Condicao`, `ColetaBloqueada`, `reais_para_centavos`
 - Produces:
-  - `abrir_navegador()` — context manager async que devolve uma `Page` do Playwright já configurada
+  - `abrir_navegador(headless: bool = True)` — context manager async que devolve uma `Page` do Playwright já configurada
   - `AdaptadorPichau` (`loja = "pichau"`) e `extrair_do_html(html: str, coletado_em: datetime) -> list[OfertaCrua]`
 
-**Por que esta task é diferente:** Pichau e Terabyte respondem 403 a qualquer cliente que não seja navegador (verificado em 2026-08-24 — a Pichau devolve uma página "Site em Manutenção – Pru Pru"). Não é possível escrever o seletor CSS de antemão, porque o HTML só existe depois de renderizado. Por isso a task começa capturando a fixture e **inspecionando-a com um script**, e só então escreve o seletor.
+**Leia isto antes de começar — reconhecimento feito em 2026-08-24 com Playwright real:**
 
-- [ ] **Step 1: Escrever o inspecionador de fixture**
+1. **Headless é bloqueado.** Com `headless=True` a Pichau devolve a página
+   "Site em Manutenção – Pru Pru". Com `headless=False` (navegador visível) a
+   página carrega de verdade: título "Memória RAM para PC e notebook em
+   promoção". No GitHub Actions isso exige `xvfb-run` (já previsto na Task 15).
+2. **O bloqueio é intermitente.** A mesma URL, no mesmo navegador visível,
+   ora carrega ora devolve 404/manutenção.
+3. **As classes CSS são hasheadas pelo MUI** (`mui-3ij2mi-strikeThrough`,
+   `mui-1ww3op6-price_vista_text`). Elas mudam a cada build da Pichau —
+   qualquer seletor apoiado nelas quebra sozinho em semanas. Por isso o
+   adaptador se apoia em **estrutura** (`h2`, `a[href]`) e lê o preço por
+   **regex sobre o texto do card**, no padrão "de R$ X por R$ Y".
+4. **Estrutura confirmada do card:** container com classe contendo
+   `MuiGrid2-grid-lg-3`, título em `h2`, link em `a[href]` com caminho
+   relativo (`/memoria-kingston-fury-...`), imagem em `img`.
 
-```python
-# scripts/inspecionar_fixture.py
-"""Mostra os candidatos a 'card de produto' num HTML salvo.
+**Decisão: a Pichau entra DESLIGADA no v1.** Não consegui capturar uma fixture
+de listagem de memória — o bloqueio impediu. Escrever seletor sem ver o HTML
+real seria chute, e chute aqui vira preço errado no banco. O adaptador fica
+escrito e testado contra o que foi possível observar, mas fora do dicionário
+`ADAPTADORES`, com um passo claro para ligá-lo. O sistema roda com 4 lojas —
+exatamente o que a spec §14 previu.
 
-Uso: python scripts/inspecionar_fixture.py pichau
-
-Procura elementos que contenham um preco em reais e um link, agrupa por
-assinatura de classe e mostra os mais frequentes -- o card de produto e,
-quase sempre, a assinatura que mais se repete.
-"""
-import re
-import sys
-from collections import Counter
-from pathlib import Path
-
-from selectolax.parser import HTMLParser
-
-PRECO = re.compile(r"R\$\s*\d")
-
-
-def inspecionar(loja: str) -> None:
-    caminho = Path("tests/fixtures") / f"{loja}_busca_ddr5.html"
-    arvore = HTMLParser(caminho.read_text(encoding="utf-8"))
-
-    assinaturas: Counter[str] = Counter()
-    exemplo: dict[str, str] = {}
-    for no in arvore.css("div, li, article"):
-        texto = no.text(strip=True)[:400]
-        if not PRECO.search(texto) or not no.css_first("a[href]"):
-            continue
-        if len(texto) > 400:
-            continue
-        classe = no.attributes.get("class") or "(sem classe)"
-        assinatura = f"{no.tag}.{classe}"
-        assinaturas[assinatura] += 1
-        exemplo.setdefault(assinatura, texto[:160])
-
-    print(f"--- {loja}: candidatos a card ---")
-    for assinatura, quantidade in assinaturas.most_common(12):
-        print(f"{quantidade:>4}x  {assinatura[:110]}")
-        print(f"       {exemplo[assinatura]}\n")
-
-
-if __name__ == "__main__":
-    inspecionar(sys.argv[1])
-```
-
-- [ ] **Step 2: Instalar o Chromium e capturar a fixture**
-
-```bash
-.venv/bin/playwright install --with-deps chromium
-.venv/bin/python scripts/capturar_fixture.py pichau
-.venv/bin/python scripts/inspecionar_fixture.py pichau
-```
-
-Expected: a saída mostra uma assinatura de classe repetindo dezenas de vezes, com texto de produto (nome + "R$"). **Essa é a assinatura do card.** Anotar o seletor do card, e dentro dele: o link (`a[href]`), o título e o preço.
-
-Se a saída vier vazia ou mostrar "Site em Manutenção", a Pichau bloqueou até o Playwright — nesse caso, pular para a Task 11 e registrar o adaptador da Pichau como desligado no `ADAPTADORES`. O sistema segue com 4 lojas (spec §14).
-
-- [ ] **Step 3: Escrever o teste que falha**
-
-```python
-# tests/adaptadores/test_pichau.py
-from datetime import UTC, datetime
-from pathlib import Path
-
-import pytest
-
-from ddr5_radar.coleta.adaptadores.pichau import extrair_do_html
-from ddr5_radar.contrato import ColetaBloqueada
-
-FIXTURE = Path(__file__).parent.parent / "fixtures" / "pichau_busca_ddr5.html"
-
-
-@pytest.fixture
-def ofertas():
-    return extrair_do_html(FIXTURE.read_text(encoding="utf-8"), datetime.now(UTC))
-
-
-def test_encontra_produtos(ofertas):
-    assert len(ofertas) >= 10
-
-
-def test_preco_em_centavos_inteiros(ofertas):
-    for oferta in ofertas:
-        assert isinstance(oferta.preco_centavos, int)
-        assert oferta.preco_centavos > 1000
-
-
-def test_url_absoluta(ofertas):
-    assert all(o.url.startswith("https://www.pichau.com.br/") for o in ofertas)
-
-
-def test_id_na_loja_nao_repete(ofertas):
-    ids = [o.id_na_loja for o in ofertas]
-    assert len(ids) == len(set(ids))
-
-
-def test_titulo_preenchido(ofertas):
-    assert all(len(o.titulo.strip()) > 10 for o in ofertas)
-
-
-def test_pagina_de_manutencao_vira_bloqueio():
-    html = "<html><head><title>Site em Manutenção - Pru Pru</title></head></html>"
-    with pytest.raises(ColetaBloqueada, match="Manuten"):
-        extrair_do_html(html, datetime.now(UTC))
-```
-
-- [ ] **Step 4: Rodar e ver falhar**
-
-Run: `.venv/bin/pytest tests/adaptadores/test_pichau.py -v`
-Expected: FAIL — `ModuleNotFoundError`
-
-- [ ] **Step 5: Implementar o navegador compartilhado**
+- [ ] **Step 1: Implementar o navegador compartilhado**
 
 ```python
 # ddr5_radar/coleta/navegador.py
@@ -2160,6 +2114,10 @@ Expected: FAIL — `ModuleNotFoundError`
 
 Abrir um Chromium por loja custaria o dobro de memoria e de tempo no
 runner do GitHub Actions.
+
+headless=False existe por causa da Pichau: com headless=True ela devolve
+a pagina de manutencao (verificado em 2026-08-24). No Actions, quem roda
+sem headless precisa de xvfb-run.
 """
 from contextlib import asynccontextmanager
 
@@ -2167,18 +2125,25 @@ from playwright.async_api import Page, async_playwright
 
 UA = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    "(KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
 )
 
 
 @asynccontextmanager
-async def abrir_navegador():
+async def abrir_navegador(headless: bool = True):
     async with async_playwright() as p:
         navegador = await p.chromium.launch(
-            args=["--disable-blink-features=AutomationControlled"]
+            headless=headless,
+            args=["--disable-blink-features=AutomationControlled"],
         )
         contexto = await navegador.new_context(
-            user_agent=UA, locale="pt-BR", viewport={"width": 1366, "height": 900}
+            user_agent=UA,
+            locale="pt-BR",
+            viewport={"width": 1440, "height": 1000},
+            extra_http_headers={"Accept-Language": "pt-BR,pt;q=0.9"},
+        )
+        await contexto.add_init_script(
+            "Object.defineProperty(navigator,'webdriver',{get:()=>undefined})"
         )
         pagina: Page = await contexto.new_page()
         try:
@@ -2188,61 +2153,154 @@ async def abrir_navegador():
             await navegador.close()
 ```
 
-- [ ] **Step 6: Implementar o adaptador**
+- [ ] **Step 2: Escrever o teste que falha**
+
+```python
+# tests/adaptadores/test_pichau.py
+"""A Pichau nao permitiu capturar fixture de listagem (bloqueio intermitente).
+
+Estes testes cobrem o que da para cobrir sem ela: a deteccao de bloqueio e a
+leitura de preco no formato "de R$ X por R$ Y", que foi observado no HTML real
+em 2026-08-24. O teste de listagem fica marcado para quando a fixture existir.
+"""
+from datetime import UTC, datetime
+from pathlib import Path
+
+import pytest
+
+from ddr5_radar.coleta.adaptadores.pichau import extrair_do_html, ler_precos
+from ddr5_radar.contrato import ColetaBloqueada
+
+FIXTURE = Path(__file__).parent.parent / "fixtures" / "pichau_lista_memoria.html"
+
+
+def test_pagina_de_manutencao_vira_bloqueio():
+    html = "<html><head><title>Site em Manutenção - Pru Pru</title></head><body></body></html>"
+    with pytest.raises(ColetaBloqueada, match="Manuten"):
+        extrair_do_html(html, datetime.now(UTC))
+
+
+def test_pagina_404_vira_bloqueio():
+    html = "<html><head><title>404 - Página não encontrada | Pichau</title></head></html>"
+    with pytest.raises(ColetaBloqueada, match="404"):
+        extrair_do_html(html, datetime.now(UTC))
+
+
+def test_le_preco_no_padrao_de_por():
+    # texto real de card observado em 2026-08-24
+    texto = "33%OFF90UNIDVentoinha Pichau Ventus NX deR$ 70,58porR$ 39,99À vista"
+    atual, cheio = ler_precos(texto)
+    assert atual == 3999
+    assert cheio == 7058
+
+
+def test_le_preco_quando_nao_ha_desconto():
+    atual, cheio = ler_precos("Memória Kingston Fury Beast 16GB DDR5 R$ 1.899,99 À vista")
+    assert atual == 189999
+    assert cheio is None
+
+
+def test_card_sem_preco_nenhum_e_ignorado():
+    assert ler_precos("Memória Kingston Fury Beast 16GB DDR5 Avise-me") == (None, None)
+
+
+@pytest.mark.skipif(not FIXTURE.exists(), reason="fixture da Pichau ainda nao capturada")
+def test_extrai_listagem_quando_a_fixture_existir():
+    ofertas = extrair_do_html(FIXTURE.read_text(encoding="utf-8"), datetime.now(UTC))
+    assert len(ofertas) >= 10
+    assert all(o.url.startswith("https://www.pichau.com.br/") for o in ofertas)
+    assert all(o.preco_centavos > 1000 for o in ofertas)
+```
+
+- [ ] **Step 3: Rodar e ver falhar**
+
+Run: `.venv/bin/pytest tests/adaptadores/test_pichau.py -v`
+Expected: FAIL — `ModuleNotFoundError: No module named 'ddr5_radar.coleta.adaptadores.pichau'`
+
+- [ ] **Step 4: Implementar o adaptador**
 
 ```python
 # ddr5_radar/coleta/adaptadores/pichau.py
-"""Pichau: responde 403 a cliente que nao e navegador.
+"""Pichau: a loja mais hostil das cinco.
 
-SUBSTITUIR os tres seletores abaixo pelos que a Task 10 Step 2 revelou na
-inspecao da fixture. Eles estao isolados no topo justamente para que a
-manutencao seja uma linha, e nao uma caca dentro da funcao.
+Reconhecimento de 2026-08-24:
+  - headless=True devolve "Site em Manutencao - Pru Pru"; headed carrega
+  - o bloqueio e intermitente mesmo com navegador visivel
+  - as classes CSS sao hasheadas pelo MUI e mudam a cada build deles
+
+Por isso nada aqui depende de nome de classe: o card e localizado pela
+classe estrutural do grid do MUI, o titulo por <h2>, o link por <a href>,
+e o preco por regex no texto -- padrao "de R$ X por R$ Y".
 """
+import re
 from datetime import UTC, datetime
 from urllib.parse import urljoin
 
 from selectolax.parser import HTMLParser
 
+from ddr5_radar.coleta.navegador import abrir_navegador
 from ddr5_radar.contrato import (
     ColetaBloqueada, Condicao, OfertaCrua, reais_para_centavos,
 )
-from ddr5_radar.coleta.navegador import abrir_navegador
 
 BASE = "https://www.pichau.com.br"
-BUSCA = f"{BASE}/search?q={{termo}}"
+LISTAGEM = f"{BASE}/hardware/memorias"
 
-SELETOR_CARD = "div[data-cy='list-product']"   # confirmar na inspecao
-SELETOR_TITULO = "h2"                          # confirmar na inspecao
-SELETOR_PRECO = "div[class*='price']"          # confirmar na inspecao
+SELETOR_CARD = "div[class*='MuiGrid2-grid-lg-3']"
+PRECO_POR = re.compile(r"por\s*R\$\s*([\d.,]+)", re.I)
+PRECO_DE = re.compile(r"\bde\s*R\$\s*([\d.,]+)", re.I)
+PRECO_QUALQUER = re.compile(r"R\$\s*([\d.,]+)")
+
+
+def ler_precos(texto: str) -> tuple[int | None, int | None]:
+    """Devolve (preco_atual, preco_cheio) em centavos.
+
+    Na Pichau o card escreve "de R$ 70,58 por R$ 39,99" quando ha desconto,
+    e so um "R$ X" quando nao ha.
+    """
+    por = PRECO_POR.search(texto)
+    de = PRECO_DE.search(texto)
+    if por:
+        atual = reais_para_centavos(por.group(1))
+        cheio = reais_para_centavos(de.group(1)) if de else None
+        return atual, (cheio if cheio and cheio > atual else None)
+
+    qualquer = PRECO_QUALQUER.search(texto)
+    return (reais_para_centavos(qualquer.group(1)), None) if qualquer else (None, None)
 
 
 def extrair_do_html(html: str, coletado_em: datetime) -> list[OfertaCrua]:
-    if "Manuten" in html and len(html) < 200_000 and "product" not in html.lower():
-        raise ColetaBloqueada("Pichau devolveu a pagina de Manutencao (anti-bot)")
-
     arvore = HTMLParser(html)
+    titulo_pagina = arvore.css_first("title")
+    rotulo = titulo_pagina.text() if titulo_pagina else ""
+    if "Manuten" in rotulo:
+        raise ColetaBloqueada("Pichau devolveu a pagina de Manutencao (anti-bot)")
+    if "404" in rotulo:
+        raise ColetaBloqueada("Pichau devolveu 404 — URL de listagem mudou ou bloqueio")
+
     ofertas = []
     for card in arvore.css(SELETOR_CARD):
         link = card.css_first("a[href]")
-        titulo = card.css_first(SELETOR_TITULO)
-        preco = card.css_first(SELETOR_PRECO)
-        if not (link and titulo and preco):
+        titulo = card.css_first("h2")
+        if not (link and titulo):
             continue
 
+        atual, cheio = ler_precos(card.text(strip=True))
+        if atual is None:
+            continue  # sem preco visivel: esgotado ou "avise-me"
+
         caminho = link.attributes.get("href", "")
+        imagem = card.css_first("img")
         ofertas.append(
             OfertaCrua(
                 loja="pichau",
                 id_na_loja=caminho.strip("/").split("/")[-1],
                 titulo=titulo.text(strip=True),
-                preco_centavos=reais_para_centavos(preco.text(strip=True)),
-                preco_original_centavos=None,
+                preco_centavos=atual,
+                preco_original_centavos=cheio,
                 em_estoque=True,
                 url=urljoin(BASE, caminho),
-                url_imagem=(
-                    card.css_first("img").attributes.get("src")
-                    if card.css_first("img") else None
-                ),
+                url_imagem=imagem.attributes.get("src") if imagem else None,
                 condicao=Condicao.NOVO,
                 vendedor="Pichau",
                 reputacao_vendedor=None,
@@ -2257,26 +2315,57 @@ class AdaptadorPichau:
 
     async def buscar(self, termo: str) -> list[OfertaCrua]:
         coletado_em = datetime.now(UTC)
-        async with abrir_navegador() as pagina:
-            await pagina.goto(
-                BUSCA.format(termo=termo), wait_until="networkidle", timeout=60_000
-            )
+        # headless=False de proposito: headless e bloqueado (ver docstring)
+        async with abrir_navegador(headless=False) as pagina:
+            await pagina.goto(LISTAGEM, wait_until="domcontentloaded", timeout=45_000)
+            await pagina.wait_for_timeout(8_000)
+            await pagina.mouse.wheel(0, 4_000)
+            await pagina.wait_for_timeout(3_000)
             html = await pagina.content()
         return extrair_do_html(html, coletado_em)
 ```
 
-Acrescentar `"pichau": AdaptadorPichau()` ao dicionário `ADAPTADORES`.
+**O registro NÃO recebe a Pichau nesta task.** Ela fica escrita e fora do ar:
 
-- [ ] **Step 7: Rodar e ver passar**
+```python
+# ddr5_radar/coleta/adaptadores/__init__.py
+from ddr5_radar.coleta.adaptadores.amazon import AdaptadorAmazon
+from ddr5_radar.coleta.adaptadores.kabum import AdaptadorKabum
+from ddr5_radar.coleta.adaptadores.mercadolivre import AdaptadorMercadoLivre
+
+# Pichau fica de fora ate existir uma fixture de listagem capturada com
+# sucesso (ver Task 10). Ligar = importar AdaptadorPichau e acrescentar aqui.
+ADAPTADORES = {
+    "kabum": AdaptadorKabum(),
+    "amazon": AdaptadorAmazon(),
+    "mercadolivre": AdaptadorMercadoLivre(),
+}
+```
+
+- [ ] **Step 5: Rodar e ver passar**
 
 Run: `.venv/bin/pytest tests/adaptadores/test_pichau.py -v`
-Expected: PASS, 6 testes. Se algum seletor estiver errado, `test_encontra_produtos` falha com 0 — voltar ao Step 2 e reler a inspeção.
+Expected: PASS, 5 testes e 1 pulado (`test_extrai_listagem_quando_a_fixture_existir`)
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 6: Tentar capturar a fixture — e ligar a Pichau se conseguir**
 
 ```bash
-git add ddr5_radar/coleta/ scripts/inspecionar_fixture.py tests/
-git commit -m "Navegador compartilhado e adaptador da Pichau"
+.venv/bin/python scripts/capturar_fixture.py pichau
+```
+
+O script precisa usar `headless=False` para a Pichau. Se o arquivo salvo tiver
+título "Memória RAM..." e mais de 10 cards, renomeá-lo para
+`tests/fixtures/pichau_lista_memoria.html`, rodar os testes de novo (o teste
+pulado agora roda) e só então acrescentar a Pichau ao `ADAPTADORES`.
+
+Se vier "Manutenção" ou "404": deixar como está e seguir. Quatro lojas bastam,
+e o Sinal 1 exige três (spec §8).
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add ddr5_radar/coleta/ tests/adaptadores/test_pichau.py
+git commit -m "Navegador compartilhado e adaptador da Pichau (desligado no v1)"
 ```
 
 ---
@@ -2285,7 +2374,7 @@ git commit -m "Navegador compartilhado e adaptador da Pichau"
 
 **Files:**
 - Create: `ddr5_radar/coleta/adaptadores/terabyte.py`
-- Create: `tests/fixtures/terabyte_busca_ddr5.html`
+- Create: `tests/fixtures/terabyte_busca_ddr5.html` (já capturada — ver Step 1)
 - Create: `tests/adaptadores/test_terabyte.py`
 - Modify: `ddr5_radar/coleta/adaptadores/__init__.py`
 
@@ -2293,16 +2382,31 @@ git commit -m "Navegador compartilhado e adaptador da Pichau"
 - Consumes: `abrir_navegador` (Task 10), `OfertaCrua`, `Condicao`, `ColetaBloqueada`, `reais_para_centavos`
 - Produces: `AdaptadorTerabyte` (`loja = "terabyte"`) e `extrair_do_html(html: str, coletado_em: datetime) -> list[OfertaCrua]`
 
-Mesma situação da Pichau: 403 para curl, HTML só depois de renderizado. O método é o mesmo — capturar, inspecionar, escrever o seletor.
+**Reconhecimento feito em 2026-08-24 — ao contrário da Pichau, aqui deu tudo certo:**
 
-- [ ] **Step 1: Capturar e inspecionar a fixture**
+- `headless=True` funciona. Não precisa de xvfb.
+- A busca `https://www.terabyteshop.com.br/busca?str=ddr5` devolveu 29 produtos.
+- As classes são **legíveis e estáveis** (não hasheadas):
 
-```bash
-.venv/bin/python scripts/capturar_fixture.py terabyte
-.venv/bin/python scripts/inspecionar_fixture.py terabyte
-```
+| Elemento | Seletor |
+|---|---|
+| card | `div.product-item` |
+| título e link | `a.product-item__name` (href relativo `/produto/22360/slug`) |
+| preço | `div.product-item__new-price` |
+| preço cheio | `div.product-item__old-price` |
+| imagem | `img.image-thumbnail` |
 
-Expected: assinatura de card repetindo dezenas de vezes. Anotar o seletor do card, do título e do preço.
+- **Atenção:** a busca traz coisa que não é memória — `PC Gamer Plataforma AMD
+  Ryzen 7000 DDR5 AM5` apareceu como primeiro resultado. Quem descarta é o
+  `eh_memoria` da Task 4, na persistência. O adaptador coleta tudo; filtrar não
+  é trabalho dele.
+- Card sem preço existe: o PC custom mostra "Monte do seu jeito" no lugar do
+  valor. Card sem `R$` é ignorado.
+
+- [ ] **Step 1: Capturar a fixture**
+
+Run: `.venv/bin/python scripts/capturar_fixture.py terabyte`
+Expected: `tests/fixtures/terabyte_busca_ddr5.html` com ~750 KB
 
 - [ ] **Step 2: Escrever o teste que falha**
 
@@ -2325,7 +2429,7 @@ def ofertas():
 
 
 def test_encontra_produtos(ofertas):
-    assert len(ofertas) >= 10
+    assert len(ofertas) >= 20
 
 
 def test_preco_em_centavos_inteiros(ofertas):
@@ -2334,8 +2438,9 @@ def test_preco_em_centavos_inteiros(ofertas):
         assert oferta.preco_centavos > 1000
 
 
-def test_url_absoluta(ofertas):
-    assert all(o.url.startswith("https://www.terabyteshop.com.br/") for o in ofertas)
+def test_url_absoluta_de_produto(ofertas):
+    for oferta in ofertas:
+        assert oferta.url.startswith("https://www.terabyteshop.com.br/produto/")
 
 
 def test_id_na_loja_nao_repete(ofertas):
@@ -2347,7 +2452,24 @@ def test_titulo_preenchido(ofertas):
     assert all(len(o.titulo.strip()) > 10 for o in ofertas)
 
 
-def test_html_vazio_vira_bloqueio():
+def test_traz_memoria_de_verdade(ofertas):
+    # a busca mistura PC gamer e placa-mae; o filtro e da Task 4, mas o
+    # adaptador tem que estar trazendo memoria de fato
+    titulos = " ".join(o.titulo.lower() for o in ofertas)
+    assert "memória ddr5" in titulos or "memoria ddr5" in titulos
+
+
+def test_card_sem_preco_e_ignorado():
+    html = """
+    <div class="product-item">
+      <a class="product-item__name" href="/produto/1/pc-custom">PC Gamer Custom Monte do seu jeito</a>
+      <div class="product-item__new-price">Monte do seu jeito</div>
+    </div>
+    """
+    assert extrair_do_html(html, datetime.now(UTC)) == []
+
+
+def test_html_sem_card_nenhum_vira_bloqueio():
     with pytest.raises(ColetaBloqueada):
         extrair_do_html("<html><body></body></html>", datetime.now(UTC))
 ```
@@ -2361,26 +2483,29 @@ Expected: FAIL — `ModuleNotFoundError`
 
 ```python
 # ddr5_radar/coleta/adaptadores/terabyte.py
-"""Terabyte: WAF bloqueia cliente que nao e navegador (403 no curl).
+"""Terabyte: WAF bloqueia curl (403), mas Playwright headless passa.
 
-SUBSTITUIR os seletores pelos que a inspecao da fixture revelou.
+Seletores confirmados em 2026-08-24 e legiveis -- nada de classe hasheada,
+ao contrario da Pichau.
 """
 from datetime import UTC, datetime
 from urllib.parse import urljoin
 
 from selectolax.parser import HTMLParser
 
+from ddr5_radar.coleta.navegador import abrir_navegador
 from ddr5_radar.contrato import (
     ColetaBloqueada, Condicao, OfertaCrua, reais_para_centavos,
 )
-from ddr5_radar.coleta.navegador import abrir_navegador
 
 BASE = "https://www.terabyteshop.com.br"
 BUSCA = f"{BASE}/busca?str={{termo}}"
 
-SELETOR_CARD = "div.pboxs"          # confirmar na inspecao
-SELETOR_TITULO = "a.tbss"           # confirmar na inspecao
-SELETOR_PRECO = "div.prod-new-price"  # confirmar na inspecao
+SELETOR_CARD = "div.product-item"
+SELETOR_NOME = "a.product-item__name"
+SELETOR_PRECO = "div.product-item__new-price"
+SELETOR_PRECO_CHEIO = "div.product-item__old-price"
+SELETOR_IMAGEM = "img.image-thumbnail"
 
 
 def extrair_do_html(html: str, coletado_em: datetime) -> list[OfertaCrua]:
@@ -2393,29 +2518,39 @@ def extrair_do_html(html: str, coletado_em: datetime) -> list[OfertaCrua]:
 
     ofertas = []
     for card in cards:
-        link = card.css_first("a[href]")
-        titulo = card.css_first(SELETOR_TITULO)
+        nome = card.css_first(SELETOR_NOME)
         preco = card.css_first(SELETOR_PRECO)
-        if not (link and titulo and preco):
+        if not (nome and preco):
             continue
 
-        caminho = link.attributes.get("href", "")
         texto_preco = preco.text(strip=True)
         if "R$" not in texto_preco:
-            continue  # produto sem preco visivel: esgotado
+            continue  # "Monte do seu jeito" (PC custom) ou esgotado
+
+        caminho = nome.attributes.get("href", "")
+        cheio = card.css_first(SELETOR_PRECO_CHEIO)
+        imagem = card.css_first(SELETOR_IMAGEM)
+        preco_centavos = reais_para_centavos(texto_preco)
+        cheio_centavos = (
+            reais_para_centavos(cheio.text(strip=True))
+            if cheio and "R$" in cheio.text() else None
+        )
 
         ofertas.append(
             OfertaCrua(
                 loja="terabyte",
-                id_na_loja=caminho.strip("/").split("/")[-1],
-                titulo=titulo.text(strip=True),
-                preco_centavos=reais_para_centavos(texto_preco),
-                preco_original_centavos=None,
+                id_na_loja=caminho.strip("/").split("/")[1],  # /produto/22360/slug
+                titulo=nome.text(strip=True),
+                preco_centavos=preco_centavos,
+                preco_original_centavos=(
+                    cheio_centavos
+                    if cheio_centavos and cheio_centavos > preco_centavos else None
+                ),
                 em_estoque=True,
                 url=urljoin(BASE, caminho),
                 url_imagem=(
-                    card.css_first("img").attributes.get("src")
-                    if card.css_first("img") else None
+                    imagem.attributes.get("data-src") or imagem.attributes.get("src")
+                    if imagem else None
                 ),
                 condicao=Condicao.NOVO,
                 vendedor="TerabyteShop",
@@ -2431,29 +2566,29 @@ class AdaptadorTerabyte:
 
     async def buscar(self, termo: str) -> list[OfertaCrua]:
         coletado_em = datetime.now(UTC)
-        async with abrir_navegador() as pagina:
+        async with abrir_navegador() as pagina:  # headless funciona aqui
             await pagina.goto(
-                BUSCA.format(termo=termo), wait_until="networkidle", timeout=60_000
+                BUSCA.format(termo=termo), wait_until="domcontentloaded", timeout=45_000
             )
+            await pagina.wait_for_timeout(5_000)
             html = await pagina.content()
         return extrair_do_html(html, coletado_em)
 ```
 
-Registro final:
+Registro final do v1 — quatro lojas ligadas:
 
 ```python
 # ddr5_radar/coleta/adaptadores/__init__.py
 from ddr5_radar.coleta.adaptadores.amazon import AdaptadorAmazon
 from ddr5_radar.coleta.adaptadores.kabum import AdaptadorKabum
 from ddr5_radar.coleta.adaptadores.mercadolivre import AdaptadorMercadoLivre
-from ddr5_radar.coleta.adaptadores.pichau import AdaptadorPichau
 from ddr5_radar.coleta.adaptadores.terabyte import AdaptadorTerabyte
 
+# Pichau segue de fora ate a fixture ser capturada (Task 10 Step 6).
 ADAPTADORES = {
     "kabum": AdaptadorKabum(),
     "amazon": AdaptadorAmazon(),
     "mercadolivre": AdaptadorMercadoLivre(),
-    "pichau": AdaptadorPichau(),
     "terabyte": AdaptadorTerabyte(),
 }
 ```
@@ -2461,13 +2596,13 @@ ADAPTADORES = {
 - [ ] **Step 5: Rodar e ver passar**
 
 Run: `.venv/bin/pytest tests/adaptadores/ -v`
-Expected: PASS, todos os adaptadores
+Expected: PASS em todos os adaptadores
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add ddr5_radar/coleta/adaptadores/ tests/
-git commit -m "Adaptador do Terabyte e registro das cinco lojas"
+git commit -m "Adaptador da Terabyte com seletores confirmados"
 ```
 
 ---
@@ -2953,7 +3088,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.13"
           cache: pip
 
       - name: Instalar dependências
@@ -2974,6 +3109,9 @@ jobs:
         if: steps.cache-navegador.outputs.cache-hit == 'true'
         run: playwright install-deps chromium
 
+      # Quando a Pichau for ligada (Task 10 Step 6), ela exige navegador
+      # visivel -- trocar a linha do run por:
+      #   xvfb-run -a python -m ddr5_radar.cli coletar --termo ddr5
       - name: Coletar
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -2987,13 +3125,13 @@ jobs:
 ```markdown
 # DDR5 Radar
 
-Vigia o preço de memórias DDR5 em cinco lojas brasileiras e guarda o
-histórico. A detecção de preço bugado e o painel são o Plano 2.
+Vigia o preço de memórias DDR5 nas lojas brasileiras e guarda o histórico.
+Quatro lojas ligadas; a Pichau está escrita mas desligada (anti-bot). A detecção de preço bugado e o painel são o Plano 2.
 
 ## Rodar localmente
 
 ```bash
-python3.12 -m venv .venv
+python3.13 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
 .venv/bin/playwright install --with-deps chromium
 
@@ -3016,13 +3154,13 @@ Uma loja só: `python -m ddr5_radar.cli coletar --loja kabum`
 
 ## Como cada loja é lida
 
-| Loja | Tática | Por quê |
+| Loja | Tática | Situação |
 |---|---|---|
-| Kabum | httpx | JSON no `__NEXT_DATA__` do HTML |
-| Amazon BR | httpx | HTML da busca; serve captcha se apertar o ritmo |
-| Mercado Livre | API oficial | Busca pública responde 403 desde 2025; exige token |
-| Pichau | Playwright | Anti-bot devolve "Site em Manutenção" para curl |
-| Terabyte | Playwright | WAF bloqueia cliente que não é navegador |
+| Kabum | httpx | ✅ JSON no `__NEXT_DATA__` do HTML |
+| Amazon BR | httpx | ✅ HTML da busca; serve captcha se apertar o ritmo |
+| Mercado Livre | API oficial | ✅ Busca pública responde 403; exige token de app grátis |
+| Terabyte | Playwright headless | ✅ WAF bloqueia curl, mas headless passa |
+| Pichau | Playwright headed | ⚠️ **Desligada.** Bloqueia headless, bloqueia de forma intermitente mesmo headed, e usa classes CSS hasheadas |
 
 Quando uma loja para de trazer resultado: `pytest -m rede -k NOME` diz se
 o formato mudou. O seletor de cada loja fica no topo do seu arquivo em
@@ -3063,7 +3201,7 @@ git commit -m "Coleta automatica a cada 10 minutos no GitHub Actions"
 Antes de considerar este plano concluído:
 
 - [ ] `.venv/bin/pytest` passa inteiro, sem rede
-- [ ] `.venv/bin/pytest -m rede` passa para pelo menos 3 das 5 lojas
+- [ ] `.venv/bin/pytest -m rede` passa para as 4 lojas ligadas
 - [ ] O workflow do Actions rodou verde ao menos duas vezes seguidas pelo cron (não só no disparo manual)
 - [ ] A tabela `ofertas` tem mais de 100 linhas
 - [ ] A tabela `precos` cresce entre uma rodada e outra, mas **não** ganha uma linha por oferta a cada rodada (prova de que a gravação só-em-mudança funciona)

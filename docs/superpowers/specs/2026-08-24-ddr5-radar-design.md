@@ -243,6 +243,12 @@ Regras que importam:
   recalculadas sobre o histórico já coletado.
 - **DDR4 aparecendo em busca de DDR5** é descartado na entrada: título com DDR4,
   ou velocidade abaixo de 4000 MT/s, não é DDR5.
+- **Nem tudo que diz DDR5 é memória.** Coleta real de 2026-08-24 na Terabyte
+  trouxe `PC Gamer Plataforma AMD Ryzen 7000 DDR5 AM5` e `Placa-mãe ASUS TUF
+  B650M-E DDR5` na mesma busca. Um PC gamer de 32GB entraria no banco como se
+  fosse um pente de 32GB e envenenaria a mediana. O filtro de entrada descarta
+  título que anuncie computador montado, placa-mãe, processador ou kit de
+  upgrade — mesmo quando diz DDR5 e declara capacidade.
 
 **O mesmo produto se repete dentro da mesma loja.** Coleta real de 2026-08-24
 no Kabum: `Memória Gamer Kingston Fury Beast, 8GB, DDR5, 5600MHz, CL40 -
