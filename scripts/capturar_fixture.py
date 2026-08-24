@@ -18,9 +18,11 @@ DESTINO = Path(__file__).parent.parent / "tests" / "fixtures"
 
 URLS_HTTP = {
     "kabum": "https://www.kabum.com.br/busca/ddr5",
-    "amazon": "https://www.amazon.com.br/s?k=memoria+ddr5",
 }
+# A Amazon passou a servir o desafio do Akamai (bm-verify) para cliente HTTP
+# puro em 2026-08-24; com navegador ela responde normal.
 URLS_NAVEGADOR = {
+    "amazon": "https://www.amazon.com.br/s?k=memoria+ddr5",
     "pichau": "https://www.pichau.com.br/hardware/memorias",
     "terabyte": "https://www.terabyteshop.com.br/busca?str=ddr5",
 }
