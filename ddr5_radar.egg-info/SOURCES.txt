@@ -1,8 +1,0 @@
-pyproject.toml
-ddr5_radar/__init__.py
-ddr5_radar.egg-info/PKG-INFO
-ddr5_radar.egg-info/SOURCES.txt
-ddr5_radar.egg-info/dependency_links.txt
-ddr5_radar.egg-info/requires.txt
-ddr5_radar.egg-info/top_level.txt
-tests/test_config.py

@@ -6,3 +6,5 @@ __pycache__/
 .gerar-migration.db
 .teste-migration.db
 *.db
+ddr5_radar.egg-info/
+*.egg-info/
