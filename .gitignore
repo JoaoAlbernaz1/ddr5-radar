@@ -1,10 +1,22 @@
-.venv/
-__pycache__/
-*.pyc
-.env
-.vercel/
-.gerar-migration.db
-.teste-migration.db
-*.db
-ddr5_radar.egg-info/
-*.egg-info/
+*.iml
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+coverage/
+
+# Plataformas (geradas por `flutter create .`)
+android/
+ios/
+linux/
+macos/
+windows/
+web/
+
+# IDE
+.idea/
+.vscode/
+*.log
