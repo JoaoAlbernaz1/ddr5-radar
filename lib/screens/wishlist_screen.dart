@@ -24,6 +24,27 @@ class WishlistScreen extends StatelessWidget {
       return const Scaffold(body: Center(child: CircularProgressIndicator(color: AppColors.green)));
     }
 
+    if (repo.error != null) {
+      return Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(repo.error!, style: AppText.body, textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: () => repo.load(),
+                  child: const Text('Tentar novamente'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final parts = repo.parts;
     final potentialSavings = parts.fold<double>(0, (sum, p) => sum + (p.currentPrice - p.targetPrice).clamp(0, double.infinity));
     final best = parts.isEmpty
@@ -32,7 +53,10 @@ class WishlistScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: TopBar(
-        action: Container(
+        action: InkWell(
+          onTap: () => repo.load(),
+          borderRadius: BorderRadius.circular(100),
+          child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
           decoration: BoxDecoration(
             color: AppColors.greenSoft,
@@ -44,8 +68,9 @@ class WishlistScreen extends StatelessWidget {
             children: [
               Container(width: 6, height: 6, decoration: const BoxDecoration(color: AppColors.green, shape: BoxShape.circle)),
               const SizedBox(width: 5),
-              Text('RADAR ATIVO', style: AppText.monoSmall.copyWith(color: AppColors.green, fontWeight: FontWeight.w700)),
+              Text('DADOS DA CONTA', style: AppText.monoSmall.copyWith(color: AppColors.green, fontWeight: FontWeight.w700)),
             ],
+          ),
           ),
         ),
       ),
@@ -68,7 +93,7 @@ class WishlistScreen extends StatelessWidget {
                         style: AppText.body,
                         children: [
                           TextSpan(text: '${parts.length} peças', style: AppText.body.copyWith(color: AppColors.text, fontWeight: FontWeight.w600)),
-                          const TextSpan(text: ' sob vigilância em tempo real.'),
+                          const TextSpan(text: ' salvas na sua conta.'),
                         ],
                       ),
                     ),
