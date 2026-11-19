@@ -1,162 +1,206 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../theme/app_theme.dart';
 import '../widgets/app_button.dart';
-import '../widgets/app_icon.dart';
 import '../widgets/logo.dart';
 
+/// Email/password Auth. Google login is intentionally hidden until configured.
 class AuthScreen extends StatefulWidget {
-  final VoidCallback onAuthenticated;
   const AuthScreen({super.key, required this.onAuthenticated});
+
+  final VoidCallback onAuthenticated;
 
   @override
   State<AuthScreen> createState() => _AuthScreenState();
 }
 
 class _AuthScreenState extends State<AuthScreen> {
-  bool _signup = false;
   final _formKey = GlobalKey<FormState>();
+  final _name = TextEditingController();
+  final _email = TextEditingController();
+  final _password = TextEditingController();
+  bool _signup = false;
+  bool _busy = false;
+  String? _message;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _email.dispose();
+    _password.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate() || _busy) return;
+    setState(() {
+      _busy = true;
+      _message = null;
+    });
+
+    try {
+      final auth = Supabase.instance.client.auth;
+      if (_signup) {
+        final response = await auth.signUp(
+          email: _email.text.trim(),
+          password: _password.text,
+          data: {'full_name': _name.text.trim()},
+        );
+        if (!mounted) return;
+        if (response.session == null) {
+          setState(() {
+            _message = 'Conta solicitada! Confira seu e-mail para confirmar '
+                'o cadastro e depois entre com sua senha.';
+            _signup = false;
+          });
+        } else {
+          widget.onAuthenticated();
+        }
+      } else {
+        final response = await auth.signInWithPassword(
+          email: _email.text.trim(),
+          password: _password.text,
+        );
+        if (!mounted) return;
+        if (response.session == null) {
+          setState(() => _message = 'Confirme seu e-mail antes de entrar.');
+        } else {
+          widget.onAuthenticated();
+        }
+      }
+    } on AuthException catch (error) {
+      if (mounted) setState(() => _message = error.message);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _message = 'Não foi possível conectar. Tente novamente.');
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Widget _field({
+    required String label,
+    required TextEditingController controller,
+    bool password = false,
+    TextInputType? keyboard,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: AppText.monoSmall),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: controller,
+          obscureText: password,
+          keyboardType: keyboard,
+          enableSuggestions: !password,
+          autocorrect: !password,
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) return 'Obrigatório';
+            if (password && value.length < 6) {
+              return 'Use pelo menos 6 caracteres.';
+            }
+            if (keyboard == TextInputType.emailAddress &&
+                !value.trim().contains('@')) {
+              return 'Informe um e-mail válido.';
+            }
+            return null;
+          },
+          style: AppText.label,
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: AppColors.surfaceAlt,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.line),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.bg,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Center(child: PartWatchLogo(iconSize: 28)),
-                const SizedBox(height: 48),
-                Column(
-                  children: [
-                    Text(_signup ? 'NOVO OPERADOR' : 'ACESSO AO RADAR', style: AppText.eyebrow, textAlign: TextAlign.center),
-                    const SizedBox(height: 10),
-                    Text(_signup ? 'Criar conta' : 'Bem-vindo de volta', style: AppText.h2, textAlign: TextAlign.center),
-                    const SizedBox(height: 8),
-                    Text(
-                      _signup
-                          ? 'Configure seu radar de preços em poucos segundos.'
-                          : 'Entre para continuar monitorando suas peças.',
-                      style: AppText.body,
-                      textAlign: TextAlign.center,
-                    ),
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Center(child: PartWatchLogo(iconSize: 28)),
+                  const SizedBox(height: 42),
+                  Text(
+                    _signup ? 'CRIAR CONTA' : 'ACESSO AO RADAR',
+                    style: AppText.eyebrow,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    _signup ? 'Crie seu monitor' : 'Bem-vindo de volta',
+                    style: AppText.h2,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 30),
+                  if (_signup) ...[
+                    _field(label: 'NOME', controller: _name),
+                    const SizedBox(height: 16),
                   ],
-                ),
-                const SizedBox(height: 32),
-                if (_signup) ...[
-                  _AuthField(label: 'NOME', icon: AppIconName.user, hint: 'Seu nome'),
+                  _field(
+                    label: 'E-MAIL',
+                    controller: _email,
+                    keyboard: TextInputType.emailAddress,
+                  ),
                   const SizedBox(height: 16),
-                ],
-                _AuthField(label: 'E-MAIL', iconText: '@', hint: 'voce@email.com'),
-                const SizedBox(height: 16),
-                _AuthField(label: 'SENHA', icon: AppIconName.target, hint: '••••••••', obscure: true),
-                const SizedBox(height: 24),
-                AppButton(
-                  label: _signup ? 'Criar conta' : 'Entrar',
-                  onPressed: widget.onAuthenticated,
-                ),
-                const SizedBox(height: 16),
-                Center(
-                  child: RichText(
-                    text: TextSpan(
-                      style: AppText.body.copyWith(fontSize: 11),
-                      children: [
-                        TextSpan(text: _signup ? 'Já tem conta? ' : 'Não tem conta? '),
-                        WidgetSpan(
-                          alignment: PlaceholderAlignment.middle,
-                          child: GestureDetector(
-                            onTap: () => setState(() => _signup = !_signup),
-                            child: Text(
-                              _signup ? 'Entrar' : 'Criar agora',
-                              style: AppText.body.copyWith(color: AppColors.green, fontWeight: FontWeight.w600, fontSize: 11),
-                            ),
-                          ),
-                        ),
-                      ],
+                  _field(
+                    label: 'SENHA',
+                    controller: _password,
+                    password: true,
+                  ),
+                  const SizedBox(height: 20),
+                  if (_message != null) ...[
+                    Text(_message!, style: AppText.body),
+                    const SizedBox(height: 16),
+                  ],
+                  AppButton(
+                    label: _busy
+                        ? 'Conectando...'
+                        : (_signup ? 'Criar conta' : 'Entrar'),
+                    onPressed: _busy ? null : _submit,
+                  ),
+                  const SizedBox(height: 14),
+                  TextButton(
+                    onPressed: _busy
+                        ? null
+                        : () => setState(() {
+                              _signup = !_signup;
+                              _message = null;
+                            }),
+                    child: Text(
+                      _signup ? 'Já tem conta? Entrar' : 'Não tem conta? Criar',
+                      style: AppText.body.copyWith(color: AppColors.green),
                     ),
                   ),
-                ),
-                const SizedBox(height: 28),
-                Row(
-                  children: [
-                    const Expanded(child: Divider(color: AppColors.line)),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Text('ou', style: AppText.monoSmall),
-                    ),
-                    const Expanded(child: Divider(color: AppColors.line)),
-                  ],
-                ),
-                const SizedBox(height: 28),
-                AppButton(
-                  label: 'Continuar com Google',
-                  variant: AppButtonVariant.ghost,
-                  onPressed: widget.onAuthenticated,
-                ),
-                const SizedBox(height: 32),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(width: 6, height: 6, decoration: const BoxDecoration(color: AppColors.green, shape: BoxShape.circle)),
-                    const SizedBox(width: 8),
-                    Text('Conexão segura com a central', style: AppText.monoSmall),
-                  ],
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  Text(
+                    'Login por Google ficará disponível após a configuração '
+                    'do provedor no Supabase.',
+                    style: AppText.monoSmall,
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       ),
-    );
-  }
-}
-
-class _AuthField extends StatelessWidget {
-  final String label;
-  final AppIconName? icon;
-  final String? iconText;
-  final String hint;
-  final bool obscure;
-
-  const _AuthField({required this.label, this.icon, this.iconText, required this.hint, this.obscure = false});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: AppText.monoSmall.copyWith(color: AppColors.muted)),
-        const SizedBox(height: 7),
-        Container(
-          height: 50,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceAlt,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.line),
-          ),
-          child: Row(
-            children: [
-              if (icon != null) AppIcon(icon!, size: 17, color: AppColors.mutedDark),
-              if (iconText != null) Text(iconText!, style: AppText.mono.copyWith(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.mutedDark)),
-              const SizedBox(width: 10),
-              Expanded(
-                child: TextFormField(
-                  obscureText: obscure,
-                  style: AppText.label,
-                  decoration: InputDecoration.collapsed(
-                    hintText: hint,
-                    hintStyle: AppText.label.copyWith(color: AppColors.mutedDark),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }
