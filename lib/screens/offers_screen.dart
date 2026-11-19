@@ -50,7 +50,8 @@ class OffersScreen extends StatelessWidget {
                 const SizedBox(height: 6),
                 Text(part.store, style: AppText.monoSmall),
                 const SizedBox(height: 22),
-                Text(currency.format(part.currentPrice), style: AppText.priceLg),
+                Text(currency.format(part.currentPrice),
+                    style: AppText.priceLg),
                 const SizedBox(height: 12),
                 Text(
                   description,
