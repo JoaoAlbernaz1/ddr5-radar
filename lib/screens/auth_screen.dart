@@ -73,7 +73,8 @@ class _AuthScreenState extends State<AuthScreen> {
       if (mounted) setState(() => _message = error.message);
     } catch (_) {
       if (mounted) {
-        setState(() => _message = 'Não foi possível conectar. Tente novamente.');
+        setState(
+            () => _message = 'Não foi possível conectar. Tente novamente.');
       }
     } finally {
       if (mounted) setState(() => _busy = false);
