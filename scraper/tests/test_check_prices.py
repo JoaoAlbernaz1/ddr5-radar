@@ -1,9 +1,12 @@
 """Offline regression tests for scraper configuration and price conversion."""
 import contextlib
+import json
 import io
 import os
 import unittest
 from unittest.mock import patch
+
+import httpx
 
 from scraper import check_prices
 
@@ -40,6 +43,86 @@ class MoneyTests(unittest.TestCase):
 
     def test_decimal_rounding(self):
         self.assertEqual(check_prices.reais_para_centavos("1.005"), 101)
+
+
+
+
+def _client_with_products(products):
+    payload = {
+        "props": {
+            "pageProps": {
+                "data": {
+                    "catalogServer": {"data": products}
+                }
+            }
+        }
+    }
+    html = (
+        '<script id="__NEXT_DATA__" type="application/json">'
+        + json.dumps(payload) + "</script>"
+    )
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(200, text=html, request=request)
+    )
+    return httpx.Client(transport=transport)
+
+
+class StoreMatchingTests(unittest.TestCase):
+    def test_chooses_only_correct_model_not_first_search_hit(self):
+        products = [
+            {
+                "name": "Ryzen 7 5800X3D",
+                "available": True,
+                "priceWithDiscount": 1299,
+            },
+            {
+                "name": "Processador AMD Ryzen 7 7800X3D",
+                "available": True,
+                "priceWithDiscount": 1799.9,
+            },
+        ]
+        with _client_with_products(products) as client:
+            found = check_prices.buscar_kabum(client, "Ryzen 7 7800X3D")
+        self.assertEqual(found["preco"], 1799.90)
+        self.assertIn("7800X3D", found["nome"])
+
+    def test_refuses_ambiguous_search(self):
+        products = [
+            {"name": "Processador Ryzen 7 7800X3D", "available": True, "price": 1800},
+            {"name": "Processador Ryzen 7 9800X3D", "available": True, "price": 2300},
+        ]
+        with _client_with_products(products) as client:
+            found = check_prices.buscar_kabum(client, "Ryzen 7")
+        self.assertIsNone(found)
+
+    def test_refuses_out_of_stock_and_unrelated_models(self):
+        products = [
+            {"name": "DDR4 32GB 3200MHz", "available": True, "price": 350},
+            {"name": "DDR5 32GB 6000MHz", "available": False, "price": 600},
+        ]
+        with _client_with_products(products) as client:
+            found = check_prices.buscar_kabum(client, "DDR5 32GB 6000MHz")
+        self.assertIsNone(found)
+
+    def test_skips_unsupported_store_before_network_request(self):
+        part = {"name": "Ryzen 7 7800X3D", "store": "Pichau"}
+        with patch.object(check_prices, "buscar_kabum") as search:
+            result = check_prices.processar_peca(None, None, part)
+        self.assertEqual(result, "loja_nao_suportada")
+        search.assert_not_called()
+
+    def test_model_token_match_requires_numbers_and_all_tokens(self):
+        self.assertTrue(check_prices.corresponde_produto(
+            "RTX 4070 Super",
+            "Placa de Video NVIDIA RTX 4070 SUPER 12GB"
+        ))
+        self.assertFalse(check_prices.corresponde_produto(
+            "RTX 4070 Ti",
+            "Placa de Video NVIDIA RTX 4070 SUPER 12GB"
+        ))
+        self.assertFalse(check_prices.corresponde_produto(
+            "Memoria gamer", "Memoria gamer varios modelos"
+        ))
 
 
 if __name__ == "__main__":
