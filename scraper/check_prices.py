@@ -120,8 +120,21 @@ def processar_peca(supabase: Client, cliente_http: httpx.Client, peca: dict) -> 
 
 
 def main() -> int:
-    url = os.environ["SUPABASE_URL"]
-    chave = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+    url = os.environ.get("SUPABASE_URL", "").strip()
+    chave = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    missing = [
+        name for name, value in (
+            ("SUPABASE_URL", url),
+            ("SUPABASE_SERVICE_ROLE_KEY", chave),
+        ) if not value
+    ]
+    if missing:
+        print(
+            "Configuracao incompleta: defina " + ", ".join(missing)
+            + " nos secrets do GitHub Actions antes de executar a coleta.",
+            file=sys.stderr,
+        )
+        return 2
     supabase = create_client(url, chave)
 
     pecas = supabase.table("parts").select("*").execute().data
