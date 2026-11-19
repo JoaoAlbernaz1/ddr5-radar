@@ -240,12 +240,20 @@ class _PartDetailScreenState extends State<PartDetailScreen> {
           Center(
             child: TextButton(
               onPressed: () async {
-                await context.read<PartsRepository>().simulatePriceCheck(part.id, double.parse((part.currentPrice * 0.95).toStringAsFixed(2)));
+                final repository = context.read<PartsRepository>();
+                await repository.load();
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Preço simulado — confira em Alertas')));
+                  final message = repository.error ??
+                      'Preços sincronizados com o banco. A coleta ocorre no worker.';
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(message)),
+                  );
                 }
               },
-              child: Text('🧪 Simular queda de preço (teste)', style: AppText.body.copyWith(fontSize: 11)),
+              child: Text(
+                'Atualizar dados do radar',
+                style: AppText.body.copyWith(fontSize: 11),
+              ),
             ),
           ),
         ],
