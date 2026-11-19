@@ -96,11 +96,11 @@ class PartsRepository extends ChangeNotifier {
       for (final row in historyRows) {
         final id = row['part_id'] as String;
         histories.putIfAbsent(id, () => []).add(
-          PricePoint(
-            date: DateTime.parse(row['created_at'] as String),
-            price: _price(row['price']),
-          ),
-        );
+              PricePoint(
+                date: DateTime.parse(row['created_at'] as String),
+                price: _price(row['price']),
+              ),
+            );
       }
 
       _parts = [
