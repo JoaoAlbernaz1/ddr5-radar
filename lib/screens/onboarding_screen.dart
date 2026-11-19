@@ -16,21 +16,21 @@ class _Slide {
 const _slides = [
   _Slide(
     icon: AppIconName.radar,
-    tag: 'MONITORAMENTO 24/7',
+    tag: 'SUA LISTA DE MONITORAMENTO',
     title: 'Seu radar de hardware.',
     text: 'Acompanhe os preços das peças que você quer e encontre o momento certo para comprar.',
   ),
   _Slide(
     icon: AppIconName.activity,
-    tag: 'PREÇO EM TEMPO REAL',
+    tag: 'HISTÓRICO DE PREÇOS',
     title: 'Cada queda. Cada loja.',
-    text: 'Comparamos ofertas nas principais lojas e mostramos o histórico completo de cada componente.',
+    text: 'Com a coleta configurada, acompanhe a evolução dos preços que foram realmente registrados.',
   ),
   _Slide(
     icon: AppIconName.bell,
     tag: 'ALERTA DE ALVO',
     title: 'O sinal chega até você.',
-    text: 'Defina seu preço ideal e receba um alerta assim que uma oferta atingir o seu alvo.',
+    text: 'Defina seu preço ideal. Quando o worker estiver ativo e detectar uma queda, o alerta aparecerá no app.',
   ),
 ];
 
