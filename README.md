@@ -14,7 +14,7 @@ incluindo o orbe de radar animado e o scanline no fundo das telas.
 ## Telas
 
 1. **Onboarding** — 3 slides de introdução ao app
-2. **Login / Cadastro** — autenticação (mock por enquanto)
+2. **Login / Cadastro** — Supabase Auth real, com confirmação de e-mail quando exigida
 3. **Minha Wishlist** (Radar) — lista de peças monitoradas, resumo de economia potencial
 4. **Buscar Peças** — catálogo com chips de categoria e filtro em bottom sheet
 5. **Ofertas** — comparador de preço entre lojas pra uma peça
@@ -24,11 +24,15 @@ incluindo o orbe de radar animado e o scanline no fundo das telas.
 9. **Alertas** — linha do tempo de notificações (queda de preço, voltou ao estoque, atingiu o alvo)
 10. **Perfil** — conta, preferências, sair
 
-## Banco de dados (ainda não provisionado)
+## Banco de dados Supabase
 
-O PartWatch **não tem banco de dados Supabase próprio criado**. O [esquema inicial e os passos de configuração](database/README.md) estão preparados para um projeto novo e separado. A aplicação Flutter segue usando dados locais, e a coleta remota permanecerá desativada até existir um banco configurado, o Supabase Auth estar implementado e a integração ser validada. **Não reutilize o banco do UniMove.**
+O PartWatch tem um projeto independente no Supabase, na organização **PartWatch**, sem compartilhamento de dados com o UniMove. [Abrir o projeto](https://supabase.com/dashboard/project/xlmurmfdkkvnalwsbyfa/editor).
 
-## Como rodar (esta máquina ainda não tem o Flutter SDK instalado)
+A migração `partwatch_initial_schema_rls` foi aplicada: `parts`, `price_history`, `alerts` e `builds`, com RLS e políticas por usuário. [Esquema e verificações](database/README.md).
+
+A aplicação agora usa **Supabase Auth e dados remotos**. O SDK utiliza a chave **publicável** do projeto, que pode ser distribuída ao cliente e está sujeita à RLS. **Nunca** embuta a chave `service_role` no Flutter.
+
+## Como rodar
 
 1. Instale o Flutter: https://docs.flutter.dev/get-started/install/windows
    (baixe o zip, extraia, adicione `flutter\bin` ao PATH)
@@ -67,9 +71,11 @@ O repositório tem **dois workflows independentes**:
 
 **Importante:** ter o job verde significa que o código executou, **não** que a loja entregou preços ou que as informações estão chegando ao aplicativo. O scraper depende das tabelas `parts`, `price_history` e `alerts` com a estrutura esperada e da disponibilidade da KaBuM; a loja pode bloquear a requisição ou alterar o HTML.
 
-### Limite atual do aplicativo
+### O que o aplicativo já usa do banco
 
-O app Flutter ainda usa `SharedPreferences` e dados locais para a lista de peças, enquanto o scraper Python lê e escreve dados remotos no Supabase. **Essas duas fontes não estão integradas.** Configurar Secrets resolverá a autenticação do workflow, mas **não fará os preços aparecerem automaticamente na tela do app**. Isso depende de uma implementação separada e testes de integração seguros com o backend; nunca incorpore a service-role key no app.
+A lista de peças, builds, histórico e alertas vêm do Supabase. A autenticação é real (e-mail/senha), e cada usuário só pode ler suas próprias informações por RLS. O onboarding usa `SharedPreferences` apenas para guardar que já foi visto; dados antigos locais não são enviados automaticamente.
+
+**Limitações:** o botão na wishlist recarrega os dados, mas o app não tem atualização em tempo real/push. O feed só mostrará alertas depois de uma coleta válida pelo worker. A busca de catálogo e o comparador de ofertas ainda contêm dados de exemplo e não devem ser interpretados como preços oficiais. O Google Login não está habilitado. Não há garantia de correspondência entre o primeiro resultado da KaBuM e a peça correta: validar o matcher antes de ligar o agendamento.
 
 Para verificar o scraper sem rede ou segredos:
 
@@ -80,16 +86,17 @@ python -m unittest discover -s scraper/tests -v
 
 ## Estado atual
 
-- UI completa e funcional, com dados de exemplo pré-carregados
-- Persistência local via `SharedPreferences` (os dados sobrevivem a reabrir o app)
-- Botão "🧪 Simular queda de preço" na tela de Detalhe pra testar o fluxo de
-  alerta sem precisar de busca real ainda
+- Supabase Auth por e-mail/senha; contas não confirmadas aguardam o e-mail.
+- CRUD de peças e builds e leitura de histórico/alertas no Supabase com RLS.
+- Botão de atualização consulta o banco, **não** simula queda de preço.
+- Conta de demonstração e dados locais fictícios removidos como fonte principal.
+- CI Flutter (format/analyze/tests), testes do scraper e `pubspec.lock` versionado.
+- Coleta automática de preços ainda **desativada**. O GitHub precisa de Secrets privados e teste real do scraper.
 
-## Próximos passos (fora do escopo de hoje)
+## Próximas etapas
 
-- Trocar a simulação por uma busca real de preço por loja (scraper ou API),
-  reaproveitando a lógica que já existia no `ddr5-radar`
-- Rodar essa busca em background (ex: `WorkManager`/`workmanager` package)
-  periodicamente
-- Notificação push de verdade via `flutter_local_notifications` quando o
-  preço atingir o alvo
+- Cadastrar um usuário pelo app e confirmar e-mail, se necessário, para validar o fluxo no dispositivo real.
+- Configurar os Secrets no GitHub e testar o worker com uma peça real cuidadosamente conferida.
+- Evitar correspondência aproximada insegura de produtos na KaBuM: usar identificadores/URLs de produto e validações antes de publicar preços.
+- Substituir ofertas sintéticas do comparador por registros reais e auditáveis.
+- Implementar refresh automático em primeiro plano, sincronização offline e notificações push quando houver dados confiáveis.
