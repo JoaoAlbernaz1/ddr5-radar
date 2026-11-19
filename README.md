@@ -16,8 +16,8 @@ incluindo o orbe de radar animado e o scanline no fundo das telas.
 1. **Onboarding** — 3 slides de introdução ao app
 2. **Login / Cadastro** — Supabase Auth real, com confirmação de e-mail quando exigida
 3. **Minha Wishlist** (Radar) — lista de peças monitoradas, resumo de economia potencial
-4. **Buscar Peças** — catálogo com chips de categoria e filtro em bottom sheet
-5. **Ofertas** — comparador de preço entre lojas pra uma peça
+4. **Buscar Peças** — filtro das peças cadastradas na conta; catálogo externo ainda não integrado
+5. **Valor registrado** — preço informado/capturado; comparador multi-loja indisponível
 6. **Adicionar Peça** — formulário com seletor de categoria e banner de scan
 7. **Detalhe da Peça** — preço + histórico com linha de alvo, toggle de notificação
 8. **Minhas Builds** — montagens salvas com custo total e aviso de compatibilidade
@@ -75,7 +75,7 @@ O repositório tem **dois workflows independentes**:
 
 A lista de peças, builds, histórico e alertas vêm do Supabase. A autenticação é real (e-mail/senha), e cada usuário só pode ler suas próprias informações por RLS. O onboarding usa `SharedPreferences` apenas para guardar que já foi visto; dados antigos locais não são enviados automaticamente.
 
-**Limitações:** o botão na wishlist recarrega os dados, mas o app não tem atualização em tempo real/push. O feed só mostrará alertas depois de uma coleta válida pelo worker. A busca de catálogo e o comparador de ofertas ainda contêm dados de exemplo e não devem ser interpretados como preços oficiais. O Google Login não está habilitado. Não há garantia de correspondência entre o primeiro resultado da KaBuM e a peça correta: validar o matcher antes de ligar o agendamento.
+**Limitações:** o botão na wishlist recarrega os dados, mas o app não tem atualização em tempo real/push. O feed só mostrará alertas depois de uma coleta válida pelo worker. A busca lista apenas as peças cadastradas na conta. O comparador com lojas externas foi substituído por um aviso honesto: ainda não existe uma API de cotações confiável. O Google Login não está habilitado. Não há garantia de correspondência entre o primeiro resultado da KaBuM e a peça correta: validar o matcher antes de ligar o agendamento.
 
 Para verificar o scraper sem rede ou segredos:
 
