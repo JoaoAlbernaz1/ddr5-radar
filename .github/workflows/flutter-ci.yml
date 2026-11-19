@@ -38,9 +38,9 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-            git diff --name-only -z "origin/$BASE_REF...HEAD" -- '*.dart' > /tmp/changed-dart
+            git diff --diff-filter=ACMRT --name-only -z "origin/$BASE_REF...HEAD" -- '*.dart' > /tmp/changed-dart
           elif [ "$GITHUB_EVENT_NAME" = "push" ] && [ -n "$BEFORE_SHA" ] && [ "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]; then
-            git diff --name-only -z "$BEFORE_SHA" "$GITHUB_SHA" -- '*.dart' > /tmp/changed-dart
+            git diff --diff-filter=ACMRT --name-only -z "$BEFORE_SHA" "$GITHUB_SHA" -- '*.dart' > /tmp/changed-dart
           else
             : > /tmp/changed-dart
           fi
