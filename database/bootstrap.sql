@@ -64,6 +64,12 @@ alter table public.price_history enable row level security;
 alter table public.alerts enable row level security;
 alter table public.builds enable row level security;
 
+-- Ensure the isolated server-side worker can access the tables through PostgREST.
+-- This must never be used with a mobile/client-side key.
+grant usage on schema public to authenticated, service_role;
+grant select, insert, update, delete on public.parts, public.price_history,
+  public.alerts, public.builds to service_role;
+
 -- No anonymous access, including on installations with permissive defaults.
 revoke all on public.parts, public.price_history, public.alerts, public.builds
   from anon, authenticated;
