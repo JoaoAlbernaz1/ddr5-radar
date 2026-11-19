@@ -27,6 +27,20 @@ jobs:
       - name: Install dependencies
         run: flutter pub get --enforce-lockfile
 
+      # Temporary formatter capture; removed before merging.
+      - name: Capture formatted screens
+        run: |
+          dart format lib/screens/search_screen.dart lib/screens/offers_screen.dart lib/screens/onboarding_screen.dart
+          echo 'START_CAPTURE:lib/screens/search_screen.dart'
+          cat lib/screens/search_screen.dart
+          echo 'END_CAPTURE:lib/screens/search_screen.dart'
+          echo 'START_CAPTURE:lib/screens/offers_screen.dart'
+          cat lib/screens/offers_screen.dart
+          echo 'END_CAPTURE:lib/screens/offers_screen.dart'
+          echo 'START_CAPTURE:lib/screens/onboarding_screen.dart'
+          cat lib/screens/onboarding_screen.dart
+          echo 'END_CAPTURE:lib/screens/onboarding_screen.dart'
+
       # The older source tree has a formatting backlog (27 files).
       # Enforce formatting on added/modified Dart files without blocking
       # unrelated workflow/configuration changes on those legacy files.
