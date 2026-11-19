@@ -31,7 +31,7 @@ O aplicativo usa `supabase_flutter: 2.15.4` com a URL e chave publicável do pr�
 A chave `service_role` ou equivalente secret **nunca** deve estar no código Flutter, no GitHub público ou em mensagens.
 
 1. Configure `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` nos [Secrets do GitHub Actions](https://github.com/JoaoAlbernaz1/ddr5-radar/settings/secrets/actions), recuperados do projeto PartWatch.
-2. Crie uma peça de teste em uma conta autenticada pelo app. Verifique o nome do produto/loja; a busca atual da KaBuM usa o primeiro resultado disponível e pode errar o modelo.
+2. Crie uma peça de teste em uma conta autenticada pelo app. Verifique o nome do produto/loja; a busca conservadora do worker exige um único modelo correspondente e não tenta consultar lojas diferentes da KaBuM; resultados ainda exigem validação manual.
 3. Rode [Check Prices](https://github.com/JoaoAlbernaz1/ddr5-radar/actions/workflows/check-prices.yml) manualmente, inspecione os produtos retornados e confirme o histórico.
 4. Apenas depois de tornar a correspondência de produtos confiável e de confirmar coleta correta, defina `PRICE_CHECK_ENABLED=true` nas Repository Variables do GitHub.
 
