@@ -20,7 +20,9 @@ import os
 import re
 import sys
 import time
+import unicodedata
 from decimal import ROUND_HALF_UP, Decimal
+from urllib.parse import quote
 
 import httpx
 from supabase import Client, create_client
@@ -53,8 +55,34 @@ def reais_para_centavos(valor) -> int:
     return int(centavos.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
 
+def _tokens_produto(texto: str) -> list[str]:
+    """Normalize punctuation and accents without guessing product equivalence."""
+    sem_acentos = "".join(
+        char for char in unicodedata.normalize("NFKD", texto)
+        if not unicodedata.combining(char)
+    )
+    return re.findall(r"[a-z0-9]+", sem_acentos.lower())
+
+
+def corresponde_produto(termo: str, nome_produto: str) -> bool:
+    """Conservative token match: never substitute an unrelated model.
+
+    More than one matching listing is considered ambiguous and ignored by
+    buscar_kabum. This does not guarantee identical SKU or capacities; a
+    stable store product identifier is needed before fully autonomous writes.
+    """
+    procurados = set(_tokens_produto(termo))
+    encontrados = set(_tokens_produto(nome_produto))
+    if len(procurados) < 2:
+        return False
+    if not any(any(ch.isdigit() for ch in token) for token in procurados):
+        return False
+    return procurados.issubset(encontrados)
+
+
 def buscar_kabum(cliente: httpx.Client, termo: str) -> dict | None:
-    resposta = cliente.get(f"{BASE}/busca/{termo}", params={"page_number": 1, "page_size": 20})
+    caminho = f"{BASE}/busca/{quote(termo, safe='')}"
+    resposta = cliente.get(caminho, params={"page_number": 1, "page_size": 20})
     if resposta.status_code == 403:
         raise ColetaBloqueada("Kabum respondeu 403")
     resposta.raise_for_status()
@@ -63,26 +91,46 @@ def buscar_kabum(cliente: httpx.Client, termo: str) -> dict | None:
     if not achado:
         raise ColetaBloqueada("Kabum nao devolveu __NEXT_DATA__ (bloqueio ou layout mudou)")
 
-    dados = json.loads(achado.group(1))
     try:
+        dados = json.loads(achado.group(1))
         itens = dados["props"]["pageProps"]["data"]["catalogServer"]["data"]
-    except (KeyError, TypeError) as erro:
+    except (KeyError, TypeError, ValueError) as erro:
         raise ColetaBloqueada(f"Formato do __NEXT_DATA__ mudou: {erro}") from erro
 
-    if not itens:
-        return None
+    if not isinstance(itens, list):
+        raise ColetaBloqueada("Catalogo nao retornou uma lista de produtos")
 
-    # Pega o primeiro item disponível em estoque — suficiente pro MVP.
-    disponivel = next((i for i in itens if i.get("available")), itens[0])
-    preco = disponivel.get("priceWithDiscount") or disponivel.get("price")
-    if not preco:
-        return None
+    correspondencias = []
+    for item in itens:
+        if not isinstance(item, dict) or not item.get("available"):
+            continue
+        nome = item.get("name")
+        if not isinstance(nome, str) or not corresponde_produto(termo, nome):
+            continue
+        preco = item.get("priceWithDiscount") or item.get("price")
+        if preco is None:
+            continue
+        centavos = reais_para_centavos(preco)
+        if centavos <= 0:
+            continue
+        correspondencias.append({"nome": nome, "preco": centavos / 100})
 
-    return {"nome": disponivel["name"], "preco": reais_para_centavos(preco) / 100}
+    # Empty or ambiguous results must not update prices.
+    if len(correspondencias) != 1:
+        print(
+            f"  nenhuma correspondencia unica e verificavel: "
+            f"{len(correspondencias)} candidatos"
+        )
+        return None
+    return correspondencias[0]
 
 
 def processar_peca(supabase: Client, cliente_http: httpx.Client, peca: dict) -> str:
     nome = peca["name"]
+    loja = "".join(_tokens_produto(str(peca.get("store", ""))))
+    if loja != "kabum":
+        print("  loja nao suportada pelo worker KaBuM; sem alteracao")
+        return "loja_nao_suportada"
     try:
         achado = buscar_kabum(cliente_http, nome)
     except ColetaBloqueada as erro:
@@ -140,7 +188,7 @@ def main() -> int:
     pecas = supabase.table("parts").select("*").execute().data
     print(f"{len(pecas)} peca(s) monitorada(s)")
 
-    resumo = {"atualizado": 0, "sem_mudanca": 0, "nao_encontrado": 0, "bloqueado": 0}
+    resumo = {"atualizado": 0, "sem_mudanca": 0, "nao_encontrado": 0, "bloqueado": 0, "loja_nao_suportada": 0}
     with httpx.Client(
         headers={"User-Agent": UA, "Accept-Language": "pt-BR,pt;q=0.9"},
         follow_redirects=True,
