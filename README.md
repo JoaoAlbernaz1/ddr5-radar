@@ -49,7 +49,7 @@ incluindo o orbe de radar animado e o scanline no fundo das telas.
 
 O repositório tem **dois workflows independentes**:
 
-- [Flutter CI](.github/workflows/flutter-ci.yml): roda `flutter pub get`, análise estática e testes. Arquivos Dart novos ou modificados devem estar formatados com `dart format`; arquivos antigos com formatação pendente não bloqueiam alterações só de configuração.
+- [Flutter CI](.github/workflows/flutter-ci.yml): roda `flutter pub get`, análise estática e testes. Arquivos Dart novos ou modificados devem estar formatados com `dart format`; arquivos antigos com formatação pendente não bloqueiam alterações só de configuração. A análise continua bloqueando **erros e warnings**, mas os 13 avisos informativos já existentes sobre `const` não bloqueiam o CI (`flutter analyze --no-fatal-infos`).
 - [Check Prices](.github/workflows/check-prices.yml): scraper Python de preços da KaBuM com gravação no Supabase. **A agenda automática começa desativada enquanto não for configurada.** Isso evita que a execução continue falhando indefinidamente por falta de credenciais.
 
 ### Habilitar a coleta de preços no GitHub
