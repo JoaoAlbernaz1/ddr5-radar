@@ -75,7 +75,7 @@ O repositório tem **dois workflows independentes**:
 
 A lista de peças, builds, histórico e alertas vêm do Supabase. A autenticação é real (e-mail/senha), e cada usuário só pode ler suas próprias informações por RLS. O onboarding usa `SharedPreferences` apenas para guardar que já foi visto; dados antigos locais não são enviados automaticamente.
 
-**Limitações:** o botão na wishlist recarrega os dados, mas o app não tem atualização em tempo real/push. O feed só mostrará alertas depois de uma coleta válida pelo worker. A busca lista apenas as peças cadastradas na conta. O comparador com lojas externas foi substituído por um aviso honesto: ainda não existe uma API de cotações confiável. O Google Login não está habilitado. Não há garantia de correspondência entre o primeiro resultado da KaBuM e a peça correta: validar o matcher antes de ligar o agendamento.
+**Limitações:** o botão na wishlist recarrega os dados, mas o app não tem atualização em tempo real/push. O feed só mostrará alertas depois de uma coleta válida pelo worker. A busca lista apenas as peças cadastradas na conta. O comparador com lojas externas foi substituído por um aviso honesto: ainda não existe uma API de cotações confiável. O Google Login não está habilitado. O worker agora exige correspondência de tokens, disponibilidade e um único candidato para peças cadastradas na KaBuM; outras lojas são ignoradas. Isso reduz substituições incorretas, mas não comprova SKU. Revise manualmente antes de ligar o agendamento.
 
 Para verificar o scraper sem rede ou segredos:
 
@@ -97,6 +97,6 @@ python -m unittest discover -s scraper/tests -v
 
 - Cadastrar um usuário pelo app e confirmar e-mail, se necessário, para validar o fluxo no dispositivo real.
 - Configurar os Secrets no GitHub e testar o worker com uma peça real cuidadosamente conferida.
-- Evitar correspondência aproximada insegura de produtos na KaBuM: usar identificadores/URLs de produto e validações antes de publicar preços.
+- Evoluir a correspondência de produtos com SKU/URL específicos da loja. A busca conservadora atual não garante o mesmo item físico e pode ignorar resultados ambíguos.
 - Substituir ofertas sintéticas do comparador por registros reais e auditáveis.
 - Implementar refresh automático em primeiro plano, sincronização offline e notificações push quando houver dados confiáveis.
