@@ -36,7 +36,8 @@ class _PartDetailScreenState extends State<PartDetailScreen> {
     final currency = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
     final delta = part.deltaPercent ?? 0;
     final history = part.history.length >= 2
-        ? part.history.sublist(part.history.length > 6 ? part.history.length - 6 : 0)
+        ? part.history
+            .sublist(part.history.length > 6 ? part.history.length - 6 : 0)
         : part.history;
     final prices = history.map((h) => h.price).toList();
     final minP = prices.isEmpty ? 0 : prices.reduce((a, b) => a < b ? a : b);
@@ -52,8 +53,13 @@ class _PartDetailScreenState extends State<PartDetailScreen> {
         action: Container(
           width: 38,
           height: 38,
-          decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(11), border: Border.all(color: AppColors.line)),
-          child: const Center(child: AppIcon(AppIconName.edit, size: 15, color: AppColors.text)),
+          decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(11),
+              border: Border.all(color: AppColors.line)),
+          child: const Center(
+              child:
+                  AppIcon(AppIconName.edit, size: 15, color: AppColors.text)),
         ),
       ),
       body: ListView(
@@ -62,7 +68,13 @@ class _PartDetailScreenState extends State<PartDetailScreen> {
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [AppColors.green.withOpacity(0.07), AppColors.surface]),
+              gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.green.withOpacity(0.07),
+                    AppColors.surface
+                  ]),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: AppColors.line),
             ),
@@ -71,39 +83,63 @@ class _PartDetailScreenState extends State<PartDetailScreen> {
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(color: AppColors.greenSoft, borderRadius: BorderRadius.circular(5)),
-                    child: Text(part.category, style: AppText.monoSmall.copyWith(color: AppColors.green, fontWeight: FontWeight.w700)),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                        color: AppColors.greenSoft,
+                        borderRadius: BorderRadius.circular(5)),
+                    child: Text(part.category,
+                        style: AppText.monoSmall.copyWith(
+                            color: AppColors.green,
+                            fontWeight: FontWeight.w700)),
                   ),
                 ),
                 const SizedBox(height: 10),
-                PartPhoto(category: part.category, size: 110, borderRadius: BorderRadius.circular(16)),
+                PartPhoto(
+                    category: part.category,
+                    size: 110,
+                    borderRadius: BorderRadius.circular(16)),
                 const SizedBox(height: 10),
-                Text('${part.store} • Em estoque', style: AppText.mono.copyWith(fontSize: 10)),
+                Text('${part.store} • Em estoque',
+                    style: AppText.mono.copyWith(fontSize: 10)),
                 const SizedBox(height: 6),
-                Text(part.name, style: AppText.h2.copyWith(fontSize: 19), textAlign: TextAlign.center),
+                Text(part.name,
+                    style: AppText.h2.copyWith(fontSize: 19),
+                    textAlign: TextAlign.center),
                 const SizedBox(height: 10),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(currency.format(part.currentPrice), style: AppText.priceLg),
+                    Text(currency.format(part.currentPrice),
+                        style: AppText.priceLg),
                     const SizedBox(width: 10),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                      decoration: BoxDecoration(color: AppColors.greenSoft, borderRadius: BorderRadius.circular(6)),
-                      child: Text('${delta <= 0 ? '↓' : '↑'} ${delta.abs().toStringAsFixed(1)}%', style: AppText.mono.copyWith(color: AppColors.green, fontWeight: FontWeight.w600)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 5),
+                      decoration: BoxDecoration(
+                          color: AppColors.greenSoft,
+                          borderRadius: BorderRadius.circular(6)),
+                      child: Text(
+                          '${delta <= 0 ? '↓' : '↑'} ${delta.abs().toStringAsFixed(1)}%',
+                          style: AppText.mono.copyWith(
+                              color: AppColors.green,
+                              fontWeight: FontWeight.w600)),
                     ),
                   ],
                 ),
                 const SizedBox(height: 6),
-                Text('MENOR PREÇO DOS ÚLTIMOS 30 DIAS', style: AppText.monoSmall),
+                Text('MENOR PREÇO DOS ÚLTIMOS 30 DIAS',
+                    style: AppText.monoSmall),
               ],
             ),
           ),
           const SizedBox(height: 14),
           Container(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: AppColors.lineSoft)),
+            decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.lineSoft)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -113,16 +149,26 @@ class _PartDetailScreenState extends State<PartDetailScreen> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('HISTÓRICO DE PREÇO', style: AppText.monoSmall.copyWith(color: AppColors.muted)),
+                        Text('HISTÓRICO DE PREÇO',
+                            style: AppText.monoSmall
+                                .copyWith(color: AppColors.muted)),
                         const SizedBox(height: 4),
-                        Text('Últimas ${history.length} leituras', style: AppText.cardTitle.copyWith(fontSize: 13)),
+                        Text('Últimas ${history.length} leituras',
+                            style: AppText.cardTitle.copyWith(fontSize: 13)),
                       ],
                     ),
                     Row(
                       children: [
-                        Container(width: 5, height: 5, decoration: const BoxDecoration(color: AppColors.green, shape: BoxShape.circle)),
+                        Container(
+                            width: 5,
+                            height: 5,
+                            decoration: const BoxDecoration(
+                                color: AppColors.green,
+                                shape: BoxShape.circle)),
                         const SizedBox(width: 4),
-                        Text('AO VIVO', style: AppText.monoSmall.copyWith(color: AppColors.green)),
+                        Text('AO VIVO',
+                            style: AppText.monoSmall
+                                .copyWith(color: AppColors.green)),
                       ],
                     ),
                   ],
@@ -140,10 +186,19 @@ class _PartDetailScreenState extends State<PartDetailScreen> {
                           child: Row(
                             children: [
                               Expanded(
-                                child: Container(height: 1, decoration: BoxDecoration(border: Border(top: BorderSide(color: AppColors.purple.withOpacity(0.45), width: 1)))),
+                                child: Container(
+                                    height: 1,
+                                    decoration: BoxDecoration(
+                                        border: Border(
+                                            top: BorderSide(
+                                                color: AppColors.purple
+                                                    .withOpacity(0.45),
+                                                width: 1)))),
                               ),
                               const SizedBox(width: 4),
-                              Text('ALVO', style: AppText.monoSmall.copyWith(color: AppColors.purple)),
+                              Text('ALVO',
+                                  style: AppText.monoSmall
+                                      .copyWith(color: AppColors.purple)),
                             ],
                           ),
                         ),
@@ -152,23 +207,42 @@ class _PartDetailScreenState extends State<PartDetailScreen> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: List.generate(history.length, (i) {
-                            final h = (((prices[i] - minP) / range) * 72).clamp(10.0, 90.0);
+                            final h = (((prices[i] - minP) / range) * 72)
+                                .clamp(10.0, 90.0);
                             final isLast = i == history.length - 1;
                             return Expanded(
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 4),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 4),
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.end,
                                   children: [
                                     Container(
                                       height: h,
                                       decoration: BoxDecoration(
-                                        borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                                        borderRadius:
+                                            const BorderRadius.vertical(
+                                                top: Radius.circular(4)),
                                         gradient: isLast
-                                            ? const LinearGradient(begin: Alignment.bottomCenter, end: Alignment.topCenter, colors: [AppColors.greenDeep, AppColors.green])
+                                            ? const LinearGradient(
+                                                begin: Alignment.bottomCenter,
+                                                end: Alignment.topCenter,
+                                                colors: [
+                                                    AppColors.greenDeep,
+                                                    AppColors.green
+                                                  ])
                                             : null,
-                                        color: isLast ? null : const Color(0xFF293343),
-                                        boxShadow: isLast ? [BoxShadow(color: AppColors.green.withOpacity(0.25), blurRadius: 10)] : null,
+                                        color: isLast
+                                            ? null
+                                            : const Color(0xFF293343),
+                                        boxShadow: isLast
+                                            ? [
+                                                BoxShadow(
+                                                    color: AppColors.green
+                                                        .withOpacity(0.25),
+                                                    blurRadius: 10)
+                                              ]
+                                            : null,
                                       ),
                                     ),
                                   ],
@@ -186,7 +260,10 @@ class _PartDetailScreenState extends State<PartDetailScreen> {
           ),
           const SizedBox(height: 14),
           Container(
-            decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: AppColors.lineSoft)),
+            decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.lineSoft)),
             child: Column(
               children: [
                 _MonitorRow(
@@ -194,7 +271,12 @@ class _PartDetailScreenState extends State<PartDetailScreen> {
                   iconColor: AppColors.green,
                   label: 'PREÇO ALVO',
                   value: currency.format(part.targetPrice),
-                  trailing: TextButton(onPressed: () {}, child: Text('Editar', style: AppText.mono.copyWith(color: AppColors.green, fontWeight: FontWeight.w600))),
+                  trailing: TextButton(
+                      onPressed: () {},
+                      child: Text('Editar',
+                          style: AppText.mono.copyWith(
+                              color: AppColors.green,
+                              fontWeight: FontWeight.w600))),
                 ),
                 const Divider(height: 1, color: AppColors.lineSoft),
                 _MonitorRow(
@@ -219,7 +301,11 @@ class _PartDetailScreenState extends State<PartDetailScreen> {
             children: [
               Expanded(
                 flex: 13,
-                child: AppButton(label: 'Salvar', icon: AppIconName.edit, variant: AppButtonVariant.ghost, onPressed: () => Navigator.of(context).pop()),
+                child: AppButton(
+                    label: 'Salvar',
+                    icon: AppIconName.edit,
+                    variant: AppButtonVariant.ghost,
+                    onPressed: () => Navigator.of(context).pop()),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -269,7 +355,12 @@ class _MonitorRow extends StatelessWidget {
   final String value;
   final Widget trailing;
 
-  const _MonitorRow({required this.icon, required this.iconColor, required this.label, required this.value, required this.trailing});
+  const _MonitorRow(
+      {required this.icon,
+      required this.iconColor,
+      required this.label,
+      required this.value,
+      required this.trailing});
 
   @override
   Widget build(BuildContext context) {
@@ -280,7 +371,9 @@ class _MonitorRow extends StatelessWidget {
           Container(
             width: 38,
             height: 38,
-            decoration: BoxDecoration(color: iconColor.withOpacity(0.12), borderRadius: BorderRadius.circular(11)),
+            decoration: BoxDecoration(
+                color: iconColor.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(11)),
             child: Center(child: AppIcon(icon, size: 16, color: iconColor)),
           ),
           const SizedBox(width: 12),
@@ -288,7 +381,8 @@ class _MonitorRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: AppText.monoSmall.copyWith(color: AppColors.muted)),
+                Text(label,
+                    style: AppText.monoSmall.copyWith(color: AppColors.muted)),
                 const SizedBox(height: 4),
                 Text(value, style: AppText.cardTitle.copyWith(fontSize: 13)),
               ],
