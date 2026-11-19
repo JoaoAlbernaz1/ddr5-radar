@@ -24,6 +24,10 @@ incluindo o orbe de radar animado e o scanline no fundo das telas.
 9. **Alertas** — linha do tempo de notificações (queda de preço, voltou ao estoque, atingiu o alvo)
 10. **Perfil** — conta, preferências, sair
 
+## Banco de dados (ainda não provisionado)
+
+O PartWatch **não tem banco de dados Supabase próprio criado**. O [esquema inicial e os passos de configuração](database/README.md) estão preparados para um projeto novo e separado. A aplicação Flutter segue usando dados locais, e a coleta remota permanecerá desativada até existir um banco configurado, o Supabase Auth estar implementado e a integração ser validada. **Não reutilize o banco do UniMove.**
+
 ## Como rodar (esta máquina ainda não tem o Flutter SDK instalado)
 
 1. Instale o Flutter: https://docs.flutter.dev/get-started/install/windows
