@@ -1,44 +1,38 @@
-# Banco de dados do PartWatch (Supabase)
+# Banco de dados PartWatch
 
-O **PartWatch ainda não possui banco hospedado próprio**. O arquivo [`bootstrap.sql`](./bootstrap.sql) descreve o esquema inicial para um projeto **novo e exclusivo**, separado de qualquer outro aplicativo.
+O banco está **ativo** no Supabase, dentro da organização `PartWatch`, em projeto independente: [abrir SQL Editor](https://supabase.com/dashboard/project/xlmurmfdkkvnalwsbyfa/editor).
 
-## Estrutura prevista
+A migração `partwatch_initial_schema_rls` foi aplicada ao projeto em 18/11/2026 (UTC 19/11). O arquivo [`bootstrap.sql`](./bootstrap.sql) preserva a definição original. **Não reaplique o bootstrap** em um banco com as tabelas existentes; migrações posteriores precisam de arquivos incrementais.
+
+## Esquema e permissões
 
 | Tabela | Finalidade |
 |---|---|
-| `parts` | Peças monitoradas, dono, preço atual, preço-alvo e configuração de alertas |
-| `price_history` | Histórico de preços coletados pelo worker |
-| `alerts` | Alertas gerados quando os preços caem |
-| `builds` | Resumo das montagens salvas |
+| `parts` | Peças monitoradas e preços-alvo por usuário |
+| `price_history` | Histórico coletado pelo worker |
+| `alerts` | Alertas gerados quando o worker constata queda |
+| `builds` | Montagens salvas por usuário |
 
-Todas as tabelas do schema `public` têm **RLS habilitado**. Cada usuário autenticado só pode acessar os próprios itens. Apenas o processo do servidor, com chave secreta guardada em ambiente privado, deve escrever histórico e alertas. Operações anônimas não recebem permissão.
+Todas as tabelas públicas têm RLS. `anon` não pode ler os dados. Usuários autenticados acessam apenas os próprios registros. Uma conta autenticada pode inserir uma peça com preço inicial e ajustar campos de configuração, mas **não** alterar `current_price` nem criar histórico/alertas; somente o worker privilegiado pode fazê-lo.
 
-## Como preparar o projeto
+A consulta de [`verify.sql`](./verify.sql) foi executada: quatro tabelas com RLS, políticas e grants conferidos. O Security Advisor do projeto não retornou alertas na verificação inicial.
 
-1. Crie um projeto Supabase **novo** chamado `partwatch`, na organização selecionada por você. **Não use o banco do UniMove.** A criação pode ter custo, conforme seu plano.
-2. Abra o **SQL Editor** do novo projeto, cole o conteúdo integral de [`bootstrap.sql`](./bootstrap.sql) e execute **uma vez só**. A transação falha se alguma tabela já existir para não encobrir conflitos de estrutura.
-3. Use [`verify.sql`](./verify.sql) para consultar se as quatro tabelas possuem RLS e se os papéis públicos não têm acesso amplo.
-4. Configure o Supabase Auth (usuários de teste, e-mail/senha e as opções de sessão adequadas). O formulário atual do aplicativo é **mock**: não autentica usuários de verdade.
-5. Em [GitHub Actions Secrets](https://github.com/JoaoAlbernaz1/ddr5-radar/settings/secrets/actions), configure `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` **somente para o worker**. A chave secreta **nunca** deve ser incluída no Flutter.
-6. Quando houver uma tabela `parts` populada com dados válidos, execute o [Check Prices](https://github.com/JoaoAlbernaz1/ddr5-radar/actions/workflows/check-prices.yml) manualmente. Observe os logs para identificar bloqueios da loja, consultas vazias e falhas de escrita.
-7. Só depois de validar o worker defina a variável `PRICE_CHECK_ENABLED=true` no repositório para habilitar os agendamentos.
+## Flutter e Auth
 
-## O que ainda falta implementar
+O aplicativo usa `supabase_flutter: 2.15.4` com a URL e chave publicável do próprio projeto. Essa chave é apropriada para código cliente porque a autorização depende de Auth e RLS. O login agora usa e-mail/senha reais; o cadastro pode exigir confirmação de e-mail no projeto.
 
-O app Flutter atual persiste seus dados em `SharedPreferences`, enquanto o script Python lê e escreve no Supabase. O banco **não conecta essas duas partes sozinho**. Antes de chamar o PartWatch de funcional com dados reais, falta:
+- Nenhum dado de demonstração local é automaticamente migrado.
+- `SharedPreferences` só é usado para lembrar a conclusão do onboarding.
+- Os dados remotos são lidos quando a sessão inicia e mediante atualização manual.
+- Ainda faltam testes de fluxo em dispositivo com duas contas reais e validação de operações concorrentes.
 
-- Substituir o formulário de login fictício por **Supabase Auth**.
-- Criar uma camada de persistência remota na aplicação com o client Flutter e **chave publicável**, usando RLS; migrar dados locais de forma deliberada.
-- Sincronizar a lista do app com `parts`, `price_history` e `alerts`, além de corrigir tratamento de erros, estados offline e conflitos.
-- Rever a associação de resultados da KaBuM com o produto exato antes de atualizar preços: atualmente o scraper escolhe o primeiro produto disponível e pode associar uma oferta diferente à peça.
-- Validar políticas de acesso com **dois usuários diferentes** e um usuário anônimo, inclusive tentativas cruzadas de leitura/escrita.
-- Revisar as consultas de preços e observabilidade para detectar casos em que o scraper roda mas nenhum produto é encontrado.
+## Worker de preços — ativação separada
 
-### Segurança
+A chave `service_role` ou equivalente secret **nunca** deve estar no código Flutter, no GitHub público ou em mensagens.
 
-- A chave `service_role` ignora RLS: **somente no GitHub Actions / servidor de confiança**.
-- Use uma **chave publicável** na aplicação Flutter após implementar autenticação e autorização por RLS.
-- Não cole credenciais em issues, commits ou mensagens.
-- O SQL é um ponto de partida para um projeto novo, não uma migração já aplicada a um banco existente.
+1. Configure `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` nos [Secrets do GitHub Actions](https://github.com/JoaoAlbernaz1/ddr5-radar/settings/secrets/actions), recuperados do projeto PartWatch.
+2. Crie uma peça de teste em uma conta autenticada pelo app. Verifique o nome do produto/loja; a busca atual da KaBuM usa o primeiro resultado disponível e pode errar o modelo.
+3. Rode [Check Prices](https://github.com/JoaoAlbernaz1/ddr5-radar/actions/workflows/check-prices.yml) manualmente, inspecione os produtos retornados e confirme o histórico.
+4. Apenas depois de tornar a correspondência de produtos confiável e de confirmar coleta correta, defina `PRICE_CHECK_ENABLED=true` nas Repository Variables do GitHub.
 
-Referência: https://supabase.com/docs/guides/database/postgres/row-level-security
+Não compartilhe o banco com UniMove. Não use a chave de serviço para autenticação do app. Nunca confunda um check verde com coleta de preços bem-sucedida.

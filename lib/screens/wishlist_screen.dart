@@ -21,31 +21,69 @@ class WishlistScreen extends StatelessWidget {
     final currency = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
 
     if (!repo.isLoaded) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator(color: AppColors.green)));
+      return const Scaffold(
+          body:
+              Center(child: CircularProgressIndicator(color: AppColors.green)));
+    }
+
+    if (repo.error != null) {
+      return Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(repo.error!,
+                    style: AppText.body, textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: () => repo.load(),
+                  child: const Text('Tentar novamente'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
     }
 
     final parts = repo.parts;
-    final potentialSavings = parts.fold<double>(0, (sum, p) => sum + (p.currentPrice - p.targetPrice).clamp(0, double.infinity));
+    final potentialSavings = parts.fold<double>(
+        0,
+        (sum, p) =>
+            sum + (p.currentPrice - p.targetPrice).clamp(0, double.infinity));
     final best = parts.isEmpty
         ? null
-        : parts.reduce((a, b) => (a.deltaPercent ?? 0) < (b.deltaPercent ?? 0) ? a : b);
+        : parts.reduce(
+            (a, b) => (a.deltaPercent ?? 0) < (b.deltaPercent ?? 0) ? a : b);
 
     return Scaffold(
       appBar: TopBar(
-        action: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-          decoration: BoxDecoration(
-            color: AppColors.greenSoft,
-            borderRadius: BorderRadius.circular(100),
-            border: Border.all(color: AppColors.green.withOpacity(0.2)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(width: 6, height: 6, decoration: const BoxDecoration(color: AppColors.green, shape: BoxShape.circle)),
-              const SizedBox(width: 5),
-              Text('RADAR ATIVO', style: AppText.monoSmall.copyWith(color: AppColors.green, fontWeight: FontWeight.w700)),
-            ],
+        action: InkWell(
+          onTap: () => repo.load(),
+          borderRadius: BorderRadius.circular(100),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            decoration: BoxDecoration(
+              color: AppColors.greenSoft,
+              borderRadius: BorderRadius.circular(100),
+              border: Border.all(color: AppColors.green.withOpacity(0.2)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                    width: 6,
+                    height: 6,
+                    decoration: const BoxDecoration(
+                        color: AppColors.green, shape: BoxShape.circle)),
+                const SizedBox(width: 5),
+                Text('DADOS DA CONTA',
+                    style: AppText.monoSmall.copyWith(
+                        color: AppColors.green, fontWeight: FontWeight.w700)),
+              ],
+            ),
           ),
         ),
       ),
@@ -67,8 +105,12 @@ class WishlistScreen extends StatelessWidget {
                       text: TextSpan(
                         style: AppText.body,
                         children: [
-                          TextSpan(text: '${parts.length} peças', style: AppText.body.copyWith(color: AppColors.text, fontWeight: FontWeight.w600)),
-                          const TextSpan(text: ' sob vigilância em tempo real.'),
+                          TextSpan(
+                              text: '${parts.length} peças',
+                              style: AppText.body.copyWith(
+                                  color: AppColors.text,
+                                  fontWeight: FontWeight.w600)),
+                          const TextSpan(text: ' salvas na sua conta.'),
                         ],
                       ),
                     ),
@@ -95,7 +137,9 @@ class WishlistScreen extends StatelessWidget {
                 child: _SummaryCard(
                   icon: AppIconName.zap,
                   label: 'MELHOR QUEDA',
-                  value: best == null ? '—' : '${(best.deltaPercent ?? 0).toStringAsFixed(1)}%',
+                  value: best == null
+                      ? '—'
+                      : '${(best.deltaPercent ?? 0).toStringAsFixed(1)}%',
                   valueColor: AppColors.green,
                   caption: best?.name,
                 ),
@@ -110,7 +154,9 @@ class WishlistScreen extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('ITENS MONITORADOS', style: AppText.mono.copyWith(fontWeight: FontWeight.w600, color: AppColors.muted)),
+                  Text('ITENS MONITORADOS',
+                      style: AppText.mono.copyWith(
+                          fontWeight: FontWeight.w600, color: AppColors.muted)),
                   const SizedBox(height: 2),
                   Text('Atualizado agora', style: AppText.monoSmall),
                 ],
@@ -123,7 +169,9 @@ class WishlistScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(11),
                   border: Border.all(color: AppColors.line),
                 ),
-                child: const Center(child: AppIcon(AppIconName.settings, size: 15, color: AppColors.text)),
+                child: const Center(
+                    child: AppIcon(AppIconName.settings,
+                        size: 15, color: AppColors.text)),
               ),
             ],
           ),
@@ -145,7 +193,8 @@ class WishlistScreen extends StatelessWidget {
                 child: PartCard(
                   part: p,
                   onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => PartDetailScreen(partId: p.id)),
+                    MaterialPageRoute(
+                        builder: (_) => PartDetailScreen(partId: p.id)),
                   ),
                 ),
               ),
@@ -155,12 +204,16 @@ class WishlistScreen extends StatelessWidget {
             width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: onAddPressed,
-              icon: const AppIcon(AppIconName.plus, size: 16, color: AppColors.onAccent),
-              label: Text('Adicionar peça', style: AppText.title.copyWith(color: AppColors.onAccent, fontSize: 13)),
+              icon: const AppIcon(AppIconName.plus,
+                  size: 16, color: AppColors.onAccent),
+              label: Text('Adicionar peça',
+                  style: AppText.title
+                      .copyWith(color: AppColors.onAccent, fontSize: 13)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.green,
                 minimumSize: const Size.fromHeight(50),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
                 elevation: 0,
               ),
             ),
@@ -178,14 +231,20 @@ class _SummaryCard extends StatelessWidget {
   final Color? valueColor;
   final String? caption;
 
-  const _SummaryCard({required this.icon, required this.label, required this.value, this.valueColor, this.caption});
+  const _SummaryCard(
+      {required this.icon,
+      required this.label,
+      required this.value,
+      this.valueColor,
+      this.caption});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [AppColors.surfaceAlt, AppColors.surface]),
+        gradient: const LinearGradient(
+            colors: [AppColors.surfaceAlt, AppColors.surface]),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.lineSoft),
       ),
@@ -196,13 +255,23 @@ class _SummaryCard extends StatelessWidget {
             children: [
               AppIcon(icon, size: 13, color: AppColors.muted),
               const SizedBox(width: 5),
-              Expanded(child: Text(label, style: AppText.monoSmall.copyWith(fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis)),
+              Expanded(
+                  child: Text(label,
+                      style: AppText.monoSmall
+                          .copyWith(fontWeight: FontWeight.w600),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis)),
             ],
           ),
           const SizedBox(height: 10),
-          Text(value, style: AppText.price.copyWith(fontSize: 17, color: valueColor ?? AppColors.text)),
+          Text(value,
+              style: AppText.price
+                  .copyWith(fontSize: 17, color: valueColor ?? AppColors.text)),
           const SizedBox(height: 4),
-          Text(caption ?? 'Se todos atingirem o alvo', style: AppText.monoSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+          Text(caption ?? 'Se todos atingirem o alvo',
+              style: AppText.monoSmall,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis),
         ],
       ),
     );
