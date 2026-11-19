@@ -45,6 +45,35 @@ incluindo o orbe de radar animado e o scanline no fundo das telas.
    flutter run
    ```
 
+## GitHub Actions: CI Flutter e monitoramento de preços
+
+O repositório tem **dois workflows independentes**:
+
+- [Flutter CI](.github/workflows/flutter-ci.yml): roda `flutter pub get`, análise estática e testes. Arquivos Dart novos ou modificados devem estar formatados com `dart format`; arquivos antigos com formatação pendente não bloqueiam alterações só de configuração. A análise continua bloqueando **erros e warnings**, mas os 13 avisos informativos já existentes sobre `const` não bloqueiam o CI (`flutter analyze --no-fatal-infos`).
+- [Check Prices](.github/workflows/check-prices.yml): scraper Python de preços da KaBuM com gravação no Supabase. **A agenda automática começa desativada enquanto não for configurada.** Isso evita que a execução continue falhando indefinidamente por falta de credenciais.
+
+### Habilitar a coleta de preços no GitHub
+
+1. No repositório, abra **Settings → Secrets and variables → Actions → Secrets** e adicione os dois **Repository secrets**:
+   - `SUPABASE_URL`: a URL do projeto correto, por exemplo `https://<project-ref>.supabase.co`.
+   - `SUPABASE_SERVICE_ROLE_KEY`: chave de acesso **privilegiada** do mesmo projeto (somente em Secrets, nunca em código, README, logs ou `VITE_`/`EXPO_PUBLIC_`).
+2. Abra **Actions → Check Prices → Run workflow**, na branch `master`. Se faltar uma credencial, a execução exibirá o nome dela sem imprimir seu valor. Se as credenciais existirem, realizará uma coleta real.
+3. **Somente depois de confirmar uma execução manual bem-sucedida**, vá em **Settings → Secrets and variables → Actions → Variables** e crie o *Repository variable* `PRICE_CHECK_ENABLED` com valor `true`. Isso libera as execuções agendadas, configuradas para cada 30 minutos (o GitHub pode atrasá-las).
+4. Para pausar a rotina, mude `PRICE_CHECK_ENABLED` para `false` ou remova a variável. As execuções agendadas ficarão com o job marcado como *skipped*, não como uma coleta bem-sucedida.
+
+**Importante:** ter o job verde significa que o código executou, **não** que a loja entregou preços ou que as informações estão chegando ao aplicativo. O scraper depende das tabelas `parts`, `price_history` e `alerts` com a estrutura esperada e da disponibilidade da KaBuM; a loja pode bloquear a requisição ou alterar o HTML.
+
+### Limite atual do aplicativo
+
+O app Flutter ainda usa `SharedPreferences` e dados locais para a lista de peças, enquanto o scraper Python lê e escreve dados remotos no Supabase. **Essas duas fontes não estão integradas.** Configurar Secrets resolverá a autenticação do workflow, mas **não fará os preços aparecerem automaticamente na tela do app**. Isso depende de uma implementação separada e testes de integração seguros com o backend; nunca incorpore a service-role key no app.
+
+Para verificar o scraper sem rede ou segredos:
+
+```bash
+python -m pip install -r scraper/requirements.txt
+python -m unittest discover -s scraper/tests -v
+```
+
 ## Estado atual
 
 - UI completa e funcional, com dados de exemplo pré-carregados
