@@ -24,16 +24,8 @@ class _SearchScreenState extends State<SearchScreen> {
   String _category = 'GPU';
   String _query = '';
 
-  // Catálogo de demonstração — numa versão real viria de uma API/scraper.
-  List<Part> get _catalog {
-    final repo = context.read<PartsRepository>();
-    final extra = [
-      Part(id: 'x1', name: 'SSD Kingston NV2 1TB NVMe', category: 'SSD', store: '5 lojas', currentPrice: 359.9, targetPrice: 320),
-      Part(id: 'x2', name: 'Radeon RX 7800 XT 16GB', category: 'GPU', store: '3 lojas', currentPrice: 3499.9, targetPrice: 3200),
-      Part(id: 'x3', name: 'Intel Core i5-14600K', category: 'CPU', store: '6 lojas', currentPrice: 1899.9, targetPrice: 1700),
-    ];
-    return [...repo.parts, ...extra];
-  }
+  // Search only the signed-in user's real saved parts.
+  List<Part> get _catalog => context.read<PartsRepository>().parts;
 
   void _openFilter() {
     showModalBottomSheet(
@@ -55,7 +47,7 @@ class _SearchScreenState extends State<SearchScreen> {
     return Scaffold(
       appBar: TopBar(
         title: 'Buscar',
-        eyebrow: 'CATÁLOGO DE PEÇAS',
+        eyebrow: 'PEÇAS DA SUA CONTA',
         action: InkWell(
           onTap: _openFilter,
           borderRadius: BorderRadius.circular(11),
@@ -95,7 +87,7 @@ class _SearchScreenState extends State<SearchScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('${results.length} RESULTADOS', style: AppText.mono.copyWith(fontWeight: FontWeight.w600, color: AppColors.muted)),
-              Text('Menor preço primeiro', style: AppText.monoSmall),
+              Text('Registradas na conta', style: AppText.monoSmall),
             ],
           ),
           const SizedBox(height: 10),
@@ -137,7 +129,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                   text: TextSpan(
                                     style: AppText.monoSmall,
                                     children: [
-                                      const TextSpan(text: 'a partir de '),
+                                      const TextSpan(text: 'valor registrado: '),
                                       TextSpan(text: currency.format(part.currentPrice), style: AppText.mono.copyWith(color: AppColors.text, fontWeight: FontWeight.w700)),
                                     ],
                                   ),
